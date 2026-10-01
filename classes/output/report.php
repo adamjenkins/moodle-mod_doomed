@@ -33,6 +33,9 @@ use templatable;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class report implements renderable, templatable {
+    /** @var int Attempts listed per student; the grade still uses all of them. */
+    public const MAX_ROWS = 25;
+
     /**
      * Constructor.
      *
@@ -103,7 +106,7 @@ class report implements renderable, templatable {
         foreach ($users as $userid => $user) {
             $grade = grading::aggregate($this->doomed, $attempts[$userid]);
             $rows = [];
-            foreach ($attempts[$userid] as $attempt) {
+            foreach (array_slice($attempts[$userid], 0, self::MAX_ROWS) as $attempt) {
                 $attemptgrade = grading::attempt_grade($this->doomed, $attempt);
                 $rows[] = [
                     'date' => userdate($attempt->timecreated, get_string('strftimedatetimeshort', 'core_langconfig')),
@@ -120,11 +123,17 @@ class report implements renderable, templatable {
                     'grade' => $attemptgrade === null ? '' : format_float($attemptgrade, 2, true, true),
                 ];
             }
+            $total = count($attempts[$userid]);
+            $gradetext = $grade === null ? get_string('nograde', 'mod_doomed') : format_float($grade, 2, true, true);
             $students[] = [
                 'fullname' => fullname($user, has_capability('moodle/site:viewfullnames', $this->context)),
                 'profileurl' => (new \moodle_url('/user/view.php', ['id' => $userid, 'course' => $this->cm->course]))->out(false),
-                'attemptcount' => count($rows),
-                'grade' => $grade === null ? '' : format_float($grade, 2, true, true),
+                'summary' => $graded
+                    ? get_string('studentsummary', 'mod_doomed', (object) ['attempts' => $total, 'grade' => $gradetext])
+                    : get_string('studentsummaryungraded', 'mod_doomed', $total),
+                'truncated' => $total > self::MAX_ROWS
+                    ? get_string('showinglatest', 'mod_doomed', (object) ['shown' => self::MAX_ROWS, 'total' => $total])
+                    : '',
                 'attempts' => $rows,
             ];
         }

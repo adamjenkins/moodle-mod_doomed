@@ -44,6 +44,12 @@ class submit_result extends external_api {
     /** @var int Game tics per second. */
     public const TICRATE = 35;
 
+    /** @var int Seconds that must pass between two results from one user in one activity. */
+    public const MIN_INTERVAL = 2;
+
+    /** @var int Most results one user may store in one activity. */
+    public const MAX_ATTEMPTS = 5000;
+
     /**
      * Parameters.
      *
@@ -122,6 +128,8 @@ class submit_result extends external_api {
         $doomed = $DB->get_record('doomed', ['id' => $cm->instance], '*', MUST_EXIST);
 
         self::check_sanity($params);
+        $now = \core\di::get(\core\clock::class)->time();
+        self::check_volume((int) $doomed->id, (int) $USER->id, $now);
 
         $attempt = (object) [
             'doomedid' => $doomed->id,
@@ -137,7 +145,7 @@ class submit_result extends external_api {
             'totalsecrets' => $params['totalsecrets'],
             'leveltime' => intdiv($params['timetics'], self::TICRATE),
             'partime' => intdiv($params['partics'], self::TICRATE),
-            'timecreated' => time(),
+            'timecreated' => $now,
         ];
         $attempt->id = $DB->insert_record('doomed_attempts', $attempt);
 
@@ -165,6 +173,31 @@ class submit_result extends external_api {
             'grade' => $grade,
             'maxgrade' => grading::is_graded($doomed) ? (float) $doomed->grade : null,
         ];
+    }
+
+    /**
+     * Refuse floods of results: a real game cannot report twice within
+     * MIN_INTERVAL seconds (a level has to load and be played), and no
+     * student needs more than MAX_ATTEMPTS stored results.
+     *
+     * @param int $doomedid activity id
+     * @param int $userid user id
+     * @param int $now current time
+     * @throws \moodle_exception
+     */
+    protected static function check_volume(int $doomedid, int $userid, int $now): void {
+        global $DB;
+        $recent = $DB->record_exists_select(
+            'doomed_attempts',
+            'doomedid = :doomedid AND userid = :userid AND timecreated > :since',
+            ['doomedid' => $doomedid, 'userid' => $userid, 'since' => $now - self::MIN_INTERVAL]
+        );
+        if ($recent) {
+            throw new \moodle_exception('submittoosoon', 'mod_doomed');
+        }
+        if ($DB->count_records('doomed_attempts', ['doomedid' => $doomedid, 'userid' => $userid]) >= self::MAX_ATTEMPTS) {
+            throw new \moodle_exception('submittoomany', 'mod_doomed', '', self::MAX_ATTEMPTS);
+        }
     }
 
     /**

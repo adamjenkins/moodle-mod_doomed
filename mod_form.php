@@ -371,6 +371,14 @@ class mod_doomed_mod_form extends moodleform_mod {
         }
 
         $suffix = $this->get_suffix();
+        // Core's "receive a grade" rules can never be met by an ungraded activity.
+        if ($mode === grading::MODE_NONE) {
+            foreach (['completionusegrade', 'completionpassgrade'] as $rule) {
+                if (!empty($data[$rule . $suffix])) {
+                    $errors[$rule . $suffix] = get_string('completionmingradeneedsgrade', 'mod_doomed');
+                }
+            }
+        }
         if (!empty($data['completionmingradeenabled' . $suffix])) {
             $mingrade = (float) ($data['completionmingrade' . $suffix] ?? 0);
             if ($mode === grading::MODE_NONE) {
@@ -393,8 +401,15 @@ class mod_doomed_mod_form extends moodleform_mod {
         if ($draftitemid <= 0) {
             return null;
         }
+        // Only a file file_save_draft_area_files() will keep: in the root
+        // folder (subdirs are off) and within the size limit. Anything else
+        // in the draft is discarded on save, so it must not be what passes
+        // validation.
+        $maxbytes = (int) wads::filemanager_options()['maxbytes'];
         $usercontext = context_user::instance($USER->id);
         $files = get_file_storage()->get_area_files($usercontext->id, 'user', 'draft', $draftitemid, 'id', false);
-        return $files ? reset($files) : null;
+        $kept = array_filter($files, fn(stored_file $file) => $file->get_filepath() === '/'
+            && ($maxbytes <= 0 || $file->get_filesize() <= $maxbytes));
+        return $kept ? reset($kept) : null;
     }
 }

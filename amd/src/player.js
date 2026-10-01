@@ -429,6 +429,13 @@ class Player {
      */
     fail(error) {
         this.running = false;
+        if (!this.engine) {
+            // Nothing is running yet: put the start screen back so the
+            // student can try again.
+            this.canvas.hidden = true;
+            this.splash.hidden = false;
+            this.startButton.disabled = false;
+        }
         Log.error('mod_doomed: ' + error);
         this.setStatus('statuserror');
     }

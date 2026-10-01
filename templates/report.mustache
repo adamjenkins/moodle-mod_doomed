@@ -24,7 +24,7 @@
     * maxgrade - formatted maximum grade
     * startmap - the activity's starting map
     * hasstudents - whether anyone has attempts
-    * students - list of students with fullname, profileurl, attemptcount, grade and attempts
+    * students - list of students with fullname, profileurl, summary, truncated (empty or a note) and attempts
 
     Example context (json):
     {
@@ -36,8 +36,8 @@
             {
                 "fullname": "Sam Student",
                 "profileurl": "#",
-                "attemptcount": 2,
-                "grade": "75",
+                "summary": "Attempts: 2. Current grade: 75.",
+                "truncated": "",
                 "attempts": [
                     {"date": "1/10/26, 14:00", "outcome": "Completed", "completed": true, "map": "E1M1", "skill": 3,
                      "kills": "20 / 29", "items": "30 / 49", "secrets": "2 / 4", "time": "3:12", "par": "0:30",
@@ -75,10 +75,8 @@
                 <tr class="table-light">
                     <th scope="rowgroup" colspan="{{#graded}}10{{/graded}}{{^graded}}9{{/graded}}">
                         <a href="{{profileurl}}">{{fullname}}</a>
-                        <span class="fw-normal">
-                            · {{#str}}attemptcount, mod_doomed, {{attemptcount}}{{/str}}
-                            {{#graded}}· {{#str}}currentgrade, mod_doomed{{/str}}: {{#grade}}{{grade}}{{/grade}}{{^grade}}{{#str}}nograde, mod_doomed{{/str}}{{/grade}}{{/graded}}
-                        </span>
+                        <span class="fw-normal ms-2">{{summary}}</span>
+                        {{#truncated}}<span class="fw-normal ms-2 text-muted">{{truncated}}</span>{{/truncated}}
                     </th>
                 </tr>
                 {{#attempts}}

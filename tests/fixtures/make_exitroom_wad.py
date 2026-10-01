@@ -26,7 +26,10 @@ The BSP is written by hand: one node splitting the map at x = 128 into two
 convex subsectors, so no node builder is needed. Textures come from the
 IWAD (Freedoom and the commercial IWADs share these names).
 
-Usage: make_exitroom_wad.py [--map E1M1|MAP01] output.wad
+Usage: make_exitroom_wad.py [--map E1M1|MAP01] [--hazard] output.wad
+
+The committed fixtures are exitroom_e1m1.wad, exitroom_map01.wad and
+(with --hazard) hazardroom_e1m1.wad.
 """
 
 import argparse
@@ -38,15 +41,20 @@ def name8(text):
     return text.encode('ascii')[:8].ljust(8, b'\0')
 
 
-def build_map():
-    """Return the map lumps as (name, bytes) pairs, excluding the marker."""
+def build_map(hazard=False):
+    """Return the map lumps as (name, bytes) pairs, excluding the marker.
+
+    With hazard=True the west room (where the player starts) is a 20%
+    damage floor (sector special 16), so a player who stands still dies
+    within a few seconds: this drives the engine's death event.
+    """
     # Vertices: west room x 0..128, east room x 128..256, y 0..128.
     verts = [(0, 0), (128, 0), (256, 0), (256, 128), (128, 128), (0, 128)]
 
     # Sectors: 0 = west, 1 = east. floor, ceiling, floor flat, ceil flat,
     # light, special, tag.
     sectors = [
-        (0, 128, 'FLOOR4_8', 'CEIL3_5', 192, 0, 0),
+        (0, 128, 'FLOOR4_8', 'CEIL3_5', 192, 16 if hazard else 0, 0),
         (0, 128, 'FLOOR4_8', 'CEIL3_5', 192, 0, 0),
     ]
 
@@ -162,9 +170,9 @@ def build_blockmap(verts, lines):
     return struct.pack('<%dH' % len(words), *words)
 
 
-def write_wad(path, mapname):
+def write_wad(path, mapname, hazard=False):
     """Write a PWAD containing the test map under the given map name."""
-    lumps = [(mapname, b'')] + build_map()
+    lumps = [(mapname, b'')] + build_map(hazard)
     data = b''
     directory = []
     offset = 12
@@ -181,9 +189,11 @@ def write_wad(path, mapname):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--map', default='E1M1', choices=['E1M1', 'MAP01'])
+    parser.add_argument('--hazard', action='store_true',
+                        help='make the starting room a damaging floor (for death tests)')
     parser.add_argument('output')
     args = parser.parse_args()
-    write_wad(args.output, args.map)
+    write_wad(args.output, args.map, args.hazard)
 
 
 if __name__ == '__main__':
