@@ -1,0 +1,16 @@
+{
+    "name": "adamjenkins/moodle-mod_doomed",
+    "description": "A Moodle activity that plays Doom-engine WAD files in the browser, with results feeding the gradebook and activity completion",
+    "type": "moodle-mod",
+    "keywords": [
+        "moodle",
+        "game",
+        "webassembly",
+        "freedoom"
+    ],
+    "license": "GPL-3.0-or-later",
+    "require": {
+        "moodle/moodle": ">=5.2 <5.4",
+        "moodle/composer-installer": "^1.0"
+    }
+}

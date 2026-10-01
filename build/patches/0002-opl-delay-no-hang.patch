@@ -1,0 +1,68 @@
+From 4719daf968810d2a47f78e84e2f715097b823d8f Mon Sep 17 00:00:00 2001
+From: Adam Jenkins <adam@wisecat.net>
+Date: Thu, 1 Oct 2026 14:07:12 +0000
+Subject: [PATCH 2/2] OPL_Delay: never hang the browser page when Web Audio
+ does not run
+
+Current Emscripten defines only __EMSCRIPTEN__, not the legacy EMSCRIPTEN macro, so the existing emscripten_sleep() in OPL_Delay was compiled out and OPL detection busy-waited forever. Test __EMSCRIPTEN__, sleep at least 1 ms per iteration, and give up after a 2 s deadline (clearing the queued callback, which points at this stack frame) so a browser whose audio never starts runs the game without music instead of hanging.
+---
+ opl/opl.c | 35 ++++++++++++++++++++++++++++++-----
+ 1 file changed, 30 insertions(+), 5 deletions(-)
+
+diff --git a/opl/opl.c b/opl/opl.c
+index e99821cb..aba6b4f5 100644
+--- a/opl/opl.c
++++ b/opl/opl.c
+@@ -28,7 +28,7 @@
+ 
+ //#define OPL_DEBUG_TRACE
+ 
+-#ifdef EMSCRIPTEN
++#ifdef __EMSCRIPTEN__
+ #include <emscripten.h>
+ #endif
+ 
+@@ -495,14 +495,39 @@ void OPL_Delay(uint64_t us)
+ 
+     SDL_LockMutex(delay_data.mutex);
+ 
++#ifdef __EMSCRIPTEN__
++    {
++        // The callback only fires when the browser's audio graph pulls
++        // samples. If audio never starts (no output device, or autoplay
++        // refused), waiting forever would hang the page, so give up after
++        // a deadline: OPL detection then fails and the game runs without
++        // music. The queued callback points at this stack frame, so it
++        // must be cleared before returning.
++        Uint32 deadline = SDL_GetTicks() + 2000;
++
++        while (!delay_data.finished)
++        {
++            SDL_CondWait(delay_data.cond, delay_data.mutex);
++            if (delay_data.finished)
++            {
++                break;
++            }
++            if (SDL_TICKS_PASSED(SDL_GetTicks(), deadline))
++            {
++                OPL_ClearCallbacks();
++                break;
++            }
++            // Async sleep (at least 1 ms) so the main thread is never
++            // starved while the audio callback catches up.
++            emscripten_sleep(us >= 1000 ? us / 1000 : 1);
++        }
++    }
++#else
+     while (!delay_data.finished)
+     {
+         SDL_CondWait(delay_data.cond, delay_data.mutex);
+-#ifdef EMSCRIPTEN
+-        // Use async sleep to avoid locking browser main thread
+-        emscripten_sleep(us / 1000);
+-#endif
+     }
++#endif
+ 
+     SDL_UnlockMutex(delay_data.mutex);
+ 

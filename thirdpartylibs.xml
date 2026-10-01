@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<libraries>
+  <library>
+    <location>engine</location>
+    <name>Chocolate Doom (WebAssembly build)</name>
+    <description>Doom-engine source port compiled to WebAssembly with Emscripten by build/build-engine.sh from the pinned upstream commit plus the patches in build/patches/.</description>
+    <version>3.1.1 (commit 895f581c5d91497bdda0516612da803fe5843e28)</version>
+    <license>GPL</license>
+    <licenseversion>2.0+</licenseversion>
+    <repository>https://github.com/chocolate-doom/chocolate-doom</repository>
+    <copyrights>
+      <copyright>1993-1996 Id Software, Inc.</copyright>
+      <copyright>2005-2025 Simon Howard and the Chocolate Doom contributors</copyright>
+    </copyrights>
+  </library>
+  <library>
+    <location>wads/freedoom1.wad</location>
+    <name>Freedoom: Phase 1</name>
+    <description>Free game data (IWAD) for Doom-engine source ports. Licence text in LICENSES/Freedoom-COPYING.txt; contributors in LICENSES/Freedoom-CREDITS.txt and LICENSES/Freedoom-CREDITS-MUSIC.txt.</description>
+    <version>0.13.0</version>
+    <license>BSD</license>
+    <licenseversion>3-Clause</licenseversion>
+    <repository>https://github.com/freedoom/freedoom</repository>
+    <copyrights>
+      <copyright>2001-2024 Contributors to the Freedoom project</copyright>
+    </copyrights>
+  </library>
+</libraries>

@@ -1,0 +1,304 @@
+From 58f51bdedbba00d9b87f97b5c2e0864a161f3934 Mon Sep 17 00:00:00 2001
+From: Adam Jenkins <adam@wisecat.net>
+Date: Thu, 1 Oct 2026 13:48:27 +0000
+Subject: [PATCH 1/2] Add mod_doomed page bridge: report game start, level
+ start, intermission stats, player death and saves to JavaScript
+
+---
+ src/doom/CMakeLists.txt  |   1 +
+ src/doom/doomed_bridge.c | 152 +++++++++++++++++++++++++++++++++++++++
+ src/doom/doomed_bridge.h |  33 +++++++++
+ src/doom/g_game.c        |   5 ++
+ src/doom/p_inter.c       |   2 +
+ src/doom/wi_stuff.c      |   3 +
+ 6 files changed, 196 insertions(+)
+ create mode 100644 src/doom/doomed_bridge.c
+ create mode 100644 src/doom/doomed_bridge.h
+
+diff --git a/src/doom/CMakeLists.txt b/src/doom/CMakeLists.txt
+index 6e878a0f..e17671da 100644
+--- a/src/doom/CMakeLists.txt
++++ b/src/doom/CMakeLists.txt
+@@ -17,6 +17,7 @@ add_library(doom STATIC
+                             doomdata.h
+             doomdef.c       doomdef.h
+             doomstat.c      doomstat.h
++            doomed_bridge.c doomed_bridge.h
+                             d_player.h
+             dstrings.c      dstrings.h
+                             d_textur.h
+diff --git a/src/doom/doomed_bridge.c b/src/doom/doomed_bridge.c
+new file mode 100644
+index 00000000..0b760f4f
+--- /dev/null
++++ b/src/doom/doomed_bridge.c
+@@ -0,0 +1,152 @@
++//
++// Copyright(C) 2026 Adam Jenkins
++//
++// This program is free software; you can redistribute it and/or
++// modify it under the terms of the GNU General Public License
++// as published by the Free Software Foundation; either version 2
++// of the License, or (at your option) any later version.
++//
++// This program is distributed in the hope that it will be useful,
++// but WITHOUT ANY WARRANTY; without even the implied warranty of
++// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++// GNU General Public License for more details.
++//
++// DESCRIPTION:
++//  Bridge from the engine to the embedding web page (Moodle mod_doomed).
++//
++//  Each event is serialised to a small JSON object and handed to
++//  Module.onDoomedEvent(event) if the page defined it. The page is
++//  responsible for anything further (logging, grading, syncing saves).
++//
++
++#include <stdio.h>
++
++#include "doomdef.h"
++#include "doomstat.h"
++#include "i_timer.h"
++#include "m_misc.h"
++
++#include "doomed_bridge.h"
++
++#ifdef __EMSCRIPTEN__
++
++#include <emscripten.h>
++
++EM_JS(void, doomed_post_json, (const char *json), {
++    var text = UTF8ToString(json);
++    if (typeof Module['onDoomedEvent'] === 'function') {
++        try {
++            Module['onDoomedEvent'](JSON.parse(text));
++        } catch (e) {
++            console.error('mod_doomed: bridge handler failed', e);
++        }
++    }
++});
++
++// Map lump name of the current level: MAPxx or ExMy.
++static void CurrentMapName(char *buf, size_t len)
++{
++    if (gamemode == commercial)
++    {
++        M_snprintf(buf, len, "MAP%02d", gamemap);
++    }
++    else
++    {
++        M_snprintf(buf, len, "E%dM%d", gameepisode, gamemap);
++    }
++}
++
++// Common prefix: event type, map and skill (1-5, as shown in the menu).
++static void Post(const char *type, const char *extra)
++{
++    char map[16];
++    char json[512];
++
++    CurrentMapName(map, sizeof(map));
++    M_snprintf(json, sizeof(json),
++               "{\"type\":\"%s\",\"map\":\"%s\",\"skill\":%d%s%s}",
++               type, map, (int) gameskill + 1,
++               extra[0] != '\0' ? "," : "", extra);
++    doomed_post_json(json);
++}
++
++void DOOMED_GameStart(void)
++{
++    if (demoplayback)
++    {
++        return;
++    }
++    Post("gamestart", "");
++}
++
++void DOOMED_LevelStart(void)
++{
++    char extra[128];
++
++    if (demoplayback)
++    {
++        return;
++    }
++    M_snprintf(extra, sizeof(extra),
++               "\"totalkills\":%d,\"totalitems\":%d,\"totalsecrets\":%d",
++               totalkills, totalitems, totalsecret);
++    Post("levelstart", extra);
++}
++
++void DOOMED_LevelComplete(wbstartstruct_t *wbs)
++{
++    char extra[384];
++    const wbplayerstruct_t *me;
++
++    if (demoplayback || wbs == NULL)
++    {
++        return;
++    }
++    me = &wbs->plyr[wbs->pnum];
++    M_snprintf(extra, sizeof(extra),
++               "\"kills\":%d,\"totalkills\":%d,"
++               "\"items\":%d,\"totalitems\":%d,"
++               "\"secrets\":%d,\"totalsecrets\":%d,"
++               "\"timetics\":%d,\"partics\":%d,\"ticrate\":%d,"
++               "\"secretexit\":%s",
++               me->skills, wbs->maxkills,
++               me->sitems, wbs->maxitems,
++               me->ssecret, wbs->maxsecret,
++               me->stime, wbs->partime, TICRATE,
++               wbs->didsecret ? "true" : "false");
++    Post("levelcomplete", extra);
++}
++
++void DOOMED_PlayerDeath(mobj_t *target)
++{
++    char extra[192];
++    player_t *player;
++
++    if (demoplayback || target == NULL || target->player == NULL
++        || target->player != &players[consoleplayer])
++    {
++        return;
++    }
++    player = target->player;
++    M_snprintf(extra, sizeof(extra),
++               "\"kills\":%d,\"items\":%d,\"secrets\":%d,\"timetics\":%d,"
++               "\"ticrate\":%d",
++               player->killcount, player->itemcount, player->secretcount,
++               leveltime, TICRATE);
++    Post("death", extra);
++}
++
++void DOOMED_GameSaved(void)
++{
++    Post("saved", "");
++}
++
++#else
++
++void DOOMED_GameStart(void) {}
++void DOOMED_LevelStart(void) {}
++void DOOMED_LevelComplete(wbstartstruct_t *wbs) { (void) wbs; }
++void DOOMED_PlayerDeath(mobj_t *target) { (void) target; }
++void DOOMED_GameSaved(void) {}
++
++#endif
+diff --git a/src/doom/doomed_bridge.h b/src/doom/doomed_bridge.h
+new file mode 100644
+index 00000000..585657d7
+--- /dev/null
++++ b/src/doom/doomed_bridge.h
+@@ -0,0 +1,33 @@
++//
++// Copyright(C) 2026 Adam Jenkins
++//
++// This program is free software; you can redistribute it and/or
++// modify it under the terms of the GNU General Public License
++// as published by the Free Software Foundation; either version 2
++// of the License, or (at your option) any later version.
++//
++// This program is distributed in the hope that it will be useful,
++// but WITHOUT ANY WARRANTY; without even the implied warranty of
++// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++// GNU General Public License for more details.
++//
++// DESCRIPTION:
++//  Bridge from the engine to the embedding web page (Moodle mod_doomed).
++//  Reports game start, level start, level completion, player death and
++//  savegame writes to JavaScript. Every function is a no-op outside an
++//  Emscripten build and during demo playback.
++//
++
++#ifndef __DOOMED_BRIDGE__
++#define __DOOMED_BRIDGE__
++
++#include "d_player.h"
++#include "p_mobj.h"
++
++void DOOMED_GameStart(void);
++void DOOMED_LevelStart(void);
++void DOOMED_LevelComplete(wbstartstruct_t *wbs);
++void DOOMED_PlayerDeath(mobj_t *target);
++void DOOMED_GameSaved(void);
++
++#endif
+diff --git a/src/doom/g_game.c b/src/doom/g_game.c
+index 42587121..3b950d4e 100644
+--- a/src/doom/g_game.c
++++ b/src/doom/g_game.c
+@@ -74,6 +74,7 @@
+ 
+ 
+ #include "g_game.h"
++#include "doomed_bridge.h"
+ 
+ 
+ #define SAVEGAMESIZE	0x2c000
+@@ -725,6 +726,8 @@ void G_DoLoadLevel (void)
+     {
+         players[consoleplayer].message = "Press escape to quit.";
+     }
++
++    DOOMED_LevelStart();
+ } 
+ 
+ static void SetJoyButtons(unsigned int buttons_mask)
+@@ -1765,6 +1768,7 @@ void G_DoSaveGame (void)
+     M_StringCopy(savedescription, "", sizeof(savedescription));
+ 
+     players[consoleplayer].message = DEH_String(GGSAVED);
++    DOOMED_GameSaved();
+ 
+     // draw the pattern into the back screen
+     R_FillBackScreen ();
+@@ -1967,6 +1971,7 @@ G_InitNew
+         skytexture = R_TextureNumForName(skytexturename);
+     }
+ 
++    DOOMED_GameStart();
+     G_DoLoadLevel ();
+ }
+ 
+diff --git a/src/doom/p_inter.c b/src/doom/p_inter.c
+index e613dfea..d42e1f86 100644
+--- a/src/doom/p_inter.c
++++ b/src/doom/p_inter.c
+@@ -38,6 +38,7 @@
+ #include "s_sound.h"
+ 
+ #include "p_inter.h"
++#include "doomed_bridge.h"
+ 
+ 
+ #define BONUSADD	6
+@@ -712,6 +713,7 @@ P_KillMobj
+ 	target->flags &= ~MF_SOLID;
+ 	target->player->playerstate = PST_DEAD;
+ 	P_DropWeapon (target->player);
++	DOOMED_PlayerDeath(target);
+ 
+ 	if (target->player == &players[consoleplayer]
+ 	    && automapactive)
+diff --git a/src/doom/wi_stuff.c b/src/doom/wi_stuff.c
+index 965cc557..b44c3f51 100644
+--- a/src/doom/wi_stuff.c
++++ b/src/doom/wi_stuff.c
+@@ -44,6 +44,7 @@
+ #include "v_video.h"
+ 
+ #include "wi_stuff.h"
++#include "doomed_bridge.h"
+ 
+ //
+ // Data needed to add patches to full screen intermission pics.
+@@ -1821,6 +1822,8 @@ void WI_initVariables(wbstartstruct_t* wbstartstruct)
+ 
+ void WI_Start(wbstartstruct_t* wbstartstruct)
+ {
++    // Report before WI_initVariables, which clamps zero totals to 1.
++    DOOMED_LevelComplete(wbstartstruct);
+     WI_initVariables(wbstartstruct);
+     WI_loadData();
+ 

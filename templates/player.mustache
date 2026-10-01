@@ -1,0 +1,68 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template mod_doomed/player
+
+    The in-browser player. The canvas stays hidden until the student starts
+    the game; amd/src/player.js loads the engine and WADs on that click.
+
+    Classes required for JS:
+    * none; JS finds elements by data-region and data-action
+
+    Context variables required for this template:
+    * uniqid - id of the root element
+    * startmap - map the game starts on
+    * canrecord - whether results are recorded for this user
+
+    Example context (json):
+    {
+        "uniqid": "mod-doomed-player-1",
+        "startmap": "E1M1",
+        "canrecord": true
+    }
+}}
+<div id="{{uniqid}}" class="mod-doomed-player" data-region="player">
+    {{^canrecord}}
+    <div class="alert alert-info">{{#str}}previewnotice, mod_doomed{{/str}}</div>
+    {{/canrecord}}
+    <div class="mod-doomed-stage" data-region="stage">
+        <canvas class="mod-doomed-canvas" data-region="canvas" tabindex="0" hidden
+            aria-label="{{#str}}canvaslabel, mod_doomed{{/str}}"
+            aria-describedby="{{uniqid}}-keys"></canvas>
+        <div class="mod-doomed-splash" data-region="splash">
+            <button type="button" class="btn btn-primary btn-lg" data-action="start">
+                {{#str}}startgame, mod_doomed, {{startmap}}{{/str}}
+            </button>
+        </div>
+    </div>
+    <div class="mod-doomed-toolbar">
+        <button type="button" class="btn btn-secondary" data-action="fullscreen" disabled>
+            {{#str}}fullscreen, mod_doomed{{/str}}
+        </button>
+        <p class="mod-doomed-status mb-0" data-region="status" role="status" aria-live="polite"></p>
+    </div>
+    <div class="mod-doomed-keys" id="{{uniqid}}-keys">
+        <p>{{#str}}keyshelp, mod_doomed{{/str}}</p>
+        <ul>
+            <li>{{#str}}keys_move, mod_doomed{{/str}}</li>
+            <li>{{#str}}keys_fire, mod_doomed{{/str}}</li>
+            <li>{{#str}}keys_use, mod_doomed{{/str}}</li>
+            <li>{{#str}}keys_menu, mod_doomed{{/str}}</li>
+            <li>{{#str}}keys_release, mod_doomed{{/str}}</li>
+        </ul>
+    </div>
+</div>

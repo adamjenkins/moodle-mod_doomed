@@ -1,0 +1,49 @@
+.mod-doomed-player {
+    max-width: 960px;
+}
+
+.mod-doomed-stage {
+    position: relative;
+    background: #000;
+    aspect-ratio: 4 / 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mod-doomed-stage .mod-doomed-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    image-rendering: pixelated;
+    outline: none;
+}
+
+.mod-doomed-stage .mod-doomed-canvas[hidden] {
+    display: none;
+}
+
+/* A visible focus state: the canvas holds the keyboard while focused. */
+.mod-doomed-stage .mod-doomed-canvas:focus {
+    outline: 4px solid var(--bs-warning);
+    outline-offset: -4px;
+}
+
+.mod-doomed-stage:fullscreen {
+    aspect-ratio: auto;
+    width: 100%;
+    height: 100%;
+}
+
+.mod-doomed-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+    margin: 0.75rem 0;
+}
+
+.mod-doomed-keys ul {
+    margin-bottom: 0;
+}
