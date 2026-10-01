@@ -357,6 +357,10 @@ function doomed_reset_userdata($data) {
         $instances = $DB->get_records('doomed', ['course' => $data->courseid]);
         foreach ($instances as $doomed) {
             $DB->delete_records('doomed_attempts', ['doomedid' => $doomed->id]);
+            $cm = get_coursemodule_from_instance('doomed', $doomed->id, $data->courseid);
+            if ($cm) {
+                \mod_doomed\local\saves::delete(context_module::instance($cm->id));
+            }
         }
         if (empty($data->reset_gradebook_grades)) {
             foreach ($instances as $doomed) {

@@ -122,6 +122,27 @@ class restore_doomed_activity_structure_step extends restore_activity_structure_
         $this->add_related_files('mod_doomed', 'intro', null);
         $this->add_related_files('mod_doomed', wads::AREA_IWAD, null);
         $this->add_related_files('mod_doomed', wads::AREA_PWAD, null);
+        if ($this->get_setting_value('userinfo')) {
+            // Saved games: item id = owner's user id, remapped through the 'user' mapping; files of
+            // users not restored have no mapping and are skipped. add_related_files() cannot be used:
+            // it requires the mapping's parentitemid to be this activity's context, which a user
+            // mapping's never is, so call the pool directly with that match skipped.
+            $results = restore_dbops::send_files_to_pool(
+                $this->get_basepath(),
+                $this->get_restoreid(),
+                'mod_doomed',
+                \mod_doomed\local\saves::AREA,
+                $this->task->get_old_contextid(),
+                $this->task->get_userid(),
+                'user',
+                null,
+                null,
+                true
+            );
+            foreach ($results as $result) {
+                $this->log($result->message, $result->level);
+            }
+        }
 
         $doomedid = $this->task->get_activityid();
         $context = context_module::instance($this->task->get_moduleid());

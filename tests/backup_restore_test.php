@@ -400,4 +400,35 @@ final class backup_restore_test extends \advanced_testcase {
         );
         $this->assertFalse(\restore_doomed_activity_structure_step::uploaded_iwad_allowed($context, get_admin()->id));
     }
+
+    /**
+     * Saved games are user data: restored with it (re-keyed to the user), left out without it.
+     */
+    public function test_saved_games_follow_user_data(): void {
+        $cm = get_coursemodule_from_instance('doomed', $this->doomed->id);
+        \mod_doomed\local\saves::store(
+            \context_module::instance($cm->id),
+            (int) $this->student->id,
+            'doomsav4.dsg',
+            'student save bytes'
+        );
+
+        $with = $this->backup_and_restore(true);
+        $withcm = get_coursemodule_from_instance('doomed', $with->id);
+        $restored = \mod_doomed\local\saves::get_user_saves(\context_module::instance($withcm->id), (int) $this->student->id);
+        $this->assertArrayHasKey('doomsav4.dsg', $restored);
+        $this->assertSame('student save bytes', $restored['doomsav4.dsg']->get_content());
+
+        $without = $this->backup_and_restore(false);
+        $withoutcm = get_coursemodule_from_instance('doomed', $without->id);
+        $files = get_file_storage()->get_area_files(
+            \context_module::instance($withoutcm->id)->id,
+            'mod_doomed',
+            \mod_doomed\local\saves::AREA,
+            false,
+            'id',
+            false
+        );
+        $this->assertSame([], $files);
+    }
 }

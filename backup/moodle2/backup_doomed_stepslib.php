@@ -67,6 +67,10 @@ class backup_doomed_activity_structure_step extends backup_activity_structure_st
         $doomed->annotate_files('mod_doomed', 'intro', null);
         $doomed->annotate_files('mod_doomed', 'iwad', null);
         $doomed->annotate_files('mod_doomed', 'pwad', null);
+        if ($userinfo) {
+            // Saved games are user data: item id = owner, remapped on restore.
+            $doomed->annotate_files('mod_doomed', 'saves', null);
+        }
 
         return $this->prepare_activity_structure($doomed);
     }

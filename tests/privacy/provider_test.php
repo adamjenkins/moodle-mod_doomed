@@ -141,7 +141,7 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
 
         $collection = provider::get_metadata(new collection('mod_doomed'));
         $items = $collection->get_collection();
-        $this->assertCount(2, $items);
+        $this->assertCount(3, $items);
         $table = reset($items);
         $this->assertInstanceOf(database_table::class, $table);
         $this->assertEquals('doomed_attempts', $table->get_name());
@@ -321,5 +321,46 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         // A course context deletes nothing.
         provider::delete_data_for_all_users_in_context(\context_course::instance($this->doomed1->course));
         $this->assertEquals(4, $this->count_attempts($this->doomed2->id));
+    }
+
+    /**
+     * Saved games on the server are found, exported and deleted with the rest of a user's data.
+     */
+    public function test_saved_games(): void {
+        global $DB;
+        $generator = $this->getDataGenerator();
+        $course = $generator->create_course();
+        $module = $generator->create_module('doomed', ['course' => $course->id]);
+        $context = \context_module::instance($module->cmid);
+        $owner = $generator->create_and_enrol($course, 'student');
+        $bystander = $generator->create_and_enrol($course, 'student');
+        \mod_doomed\local\saves::store($context, (int) $owner->id, 'doomsav2.dsg', 'owner save');
+        \mod_doomed\local\saves::store($context, (int) $bystander->id, 'doomsav2.dsg', 'bystander save');
+        // Neither user has attempts: only the saves tie them to the context.
+        $this->assertSame(0, $DB->count_records('doomed_attempts', ['doomedid' => $module->id]));
+
+        $this->assertContainsEquals($context->id, provider::get_contexts_for_userid((int) $owner->id)->get_contextids());
+        $userlist = new \core_privacy\local\request\userlist($context, 'mod_doomed');
+        provider::get_users_in_context($userlist);
+        $this->assertEqualsCanonicalizing([(int) $owner->id, (int) $bystander->id], array_map('intval', $userlist->get_userids()));
+
+        $approved = new \core_privacy\local\request\approved_contextlist($owner, 'mod_doomed', [$context->id]);
+        provider::export_user_data($approved);
+        $writer = \core_privacy\local\request\writer::with_context($context);
+        $files = $writer->get_files([get_string('privacy:savedgames', 'mod_doomed')]);
+        $this->assertArrayHasKey('doomsav2.dsg', $files);
+        $this->assertSame('owner save', $files['doomsav2.dsg']->get_content());
+
+        provider::delete_data_for_user($approved);
+        $this->assertSame([], \mod_doomed\local\saves::get_user_saves($context, (int) $owner->id));
+        $this->assertCount(1, \mod_doomed\local\saves::get_user_saves($context, (int) $bystander->id));
+
+        $userlist = new \core_privacy\local\request\approved_userlist($context, 'mod_doomed', [(int) $bystander->id]);
+        provider::delete_data_for_users($userlist);
+        $this->assertSame([], \mod_doomed\local\saves::get_user_saves($context, (int) $bystander->id));
+
+        \mod_doomed\local\saves::store($context, (int) $owner->id, 'doomsav3.dsg', 'again');
+        provider::delete_data_for_all_users_in_context($context);
+        $this->assertSame([], \mod_doomed\local\saves::get_user_saves($context, (int) $owner->id));
     }
 }

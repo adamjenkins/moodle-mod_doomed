@@ -48,6 +48,13 @@ if ($ADMIN->fulltree) {
         1
     ));
 
+    $settings->add(new admin_setting_configcheckbox(
+        'mod_doomed/syncsaves',
+        new lang_string('syncsaves', 'mod_doomed'),
+        new lang_string('syncsaves_desc', 'mod_doomed'),
+        1
+    ));
+
     $settings->add(new admin_setting_configselect(
         'mod_doomed/maxwadsize',
         new lang_string('maxwadsize', 'mod_doomed'),

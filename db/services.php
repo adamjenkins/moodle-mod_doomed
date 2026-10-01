@@ -32,4 +32,18 @@ $functions = [
         'ajax' => true,
         'capabilities' => 'mod/doomed:play',
     ],
+    'mod_doomed_get_saves' => [
+        'classname' => 'mod_doomed\external\get_saves',
+        'description' => 'Return the calling user\'s saved games for an activity.',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'mod/doomed:play',
+    ],
+    'mod_doomed_store_save' => [
+        'classname' => 'mod_doomed\external\store_save',
+        'description' => 'Store one of the calling user\'s saved games for an activity.',
+        'type' => 'write',
+        'ajax' => true,
+        'capabilities' => 'mod/doomed:play',
+    ],
 ];

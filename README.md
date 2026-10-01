@@ -26,7 +26,8 @@ the owners of any commercial game.
 - **Completion rules:** complete the starting map; achieve a minimum grade.
 - **Attempts report** for teachers, with group filtering.
 - **Saved games** persist in the student's browser (IndexedDB), separately per
-  user and per activity.
+  user and per activity, and (by default) a copy is kept on the server so they
+  follow the student to other devices and browsers.
 - Backup and restore (with or without attempts), course reset, privacy API
   (export and deletion of attempts), and events for viewing the activity and
   submitting a result.
@@ -82,6 +83,8 @@ use its grades for anything that matters more than that.
    - **Allow uploaded IWADs**: whether teachers holding
      `mod/doomed:uploadiwad` may use their own IWAD (on by default; the
      capability is given to editing teachers and managers).
+   - **Keep saved games on the server** (on by default): students' saves are
+     copied to the server and restored in any browser they play in.
    - **Maximum WAD upload size**.
 
 The engine ships prebuilt in `engine/`, so no build tools are needed to
@@ -164,10 +167,16 @@ Keyboard and accessibility:
 - **Fullscreen** enlarges the game screen; Esc or the browser's own control
   leaves fullscreen.
 
-Saved games live in the browser's IndexedDB, keyed by user and activity. They
-do not follow a student to another device or browser. They are lost if the
-browser's site data is cleared. On a shared computer they stay in that
-browser's profile.
+Saved games live in the browser's IndexedDB, keyed by user and activity. With
+**Keep saved games on the server** on (the default), each in-game save is also
+uploaded for students whose results are recorded (`mod/doomed:play`). When the
+game starts in any browser, server copies newer than the local ones are
+downloaded first, so saves follow the student across devices. The newest copy
+of each of the six slots wins. Each save is at most 1 MB. Saves are returned
+only to their owner, through a web service; they are never served as files.
+With the setting off, saves stay in the browser they were made in. Clearing
+the browser's site data then loses them. On a shared computer they stay in
+that browser's profile.
 
 ## WAD licensing
 
@@ -191,8 +200,10 @@ distributable; check each one's licence text.
 
 The server stores one row per level completion or death per student in
 `doomed_attempts`: map, skill, kills, items, secrets, level and par times, and
-the time it was recorded. The privacy API exports and deletes these. Grades go
-to the gradebook. Saved games never leave the browser.
+the time it was recorded. With server saves on, it also stores each student's
+saved games in the activity's files. The privacy API exports and deletes both.
+Grades go to the gradebook. Backup includes saved games only together with user
+data, and course reset deletes them with the attempts.
 
 ## Known limitations and future work
 
@@ -201,8 +212,6 @@ to the gradebook. Saved games never leave the browser.
   engine is built with networking disabled.
 - **Moodle mobile app** support is not implemented (the plugin has no
   `db/mobile.php`), so students play in a web browser.
-- Saved games are per browser. Syncing them to a per-user file area, so they
-  follow a student across devices, is a possible extension.
 - Results are client-reported (see above).
 
 ## Development

@@ -40,6 +40,47 @@ export const GAME_EVENT = 'mod_doomed:gameevent';
  */
 const formatGrade = (value) => String(Math.round(value * 100) / 100);
 
+/** @type {RegExp} The game menu's six save slot files. */
+const SAVE_FILE = /^doomsav[0-5]\.dsg$/;
+
+/**
+ * Base64-encode bytes without building one huge argument list.
+ *
+ * @param {Uint8Array} bytes data
+ * @returns {string}
+ */
+const bytesToBase64 = (bytes) => {
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    }
+    return window.btoa(binary);
+};
+
+/**
+ * Decode base64 to bytes.
+ *
+ * @param {string} text base64
+ * @returns {Uint8Array}
+ */
+const base64ToBytes = (text) => Uint8Array.from(window.atob(text), (c) => c.charCodeAt(0));
+
+/**
+ * Modification time of a file in the engine's filesystem, in milliseconds (0 if missing).
+ *
+ * @param {Object} engine the engine module
+ * @param {string} path file path
+ * @returns {number}
+ */
+const fileTime = (engine, path) => {
+    try {
+        const mtime = engine.FS.stat(path).mtime;
+        return mtime instanceof Date ? mtime.getTime() : Number(mtime);
+    } catch (e) {
+        return 0;
+    }
+};
+
 /**
  * Load the engine factory (createDoomedEngine) through RequireJS.
  *
@@ -199,6 +240,8 @@ class Player {
         this.running = false;
         this.statusSequence = 0;
         this.levelTotals = null;
+        // Save file name => modification time (ms) of the copy known to be on the server.
+        this.serverSaveTimes = {};
 
         this.startButton.addEventListener('click', () => this.start());
         this.fullscreenButton.addEventListener('click', () => this.toggleFullscreen());
@@ -281,6 +324,9 @@ class Player {
         this.root.dispatchEvent(new CustomEvent(GAME_EVENT, {detail: event, bubbles: true}));
         if (event.type === 'saved' && this.engine) {
             syncSaves(this.engine, false);
+            if (this.config.syncsaves) {
+                this.pushSaves(true);
+            }
         }
         if (event.type === 'levelstart') {
             this.levelTotals = {
@@ -394,6 +440,11 @@ class Player {
             engine.FS.mount(engine.IDBFS, {}, config.saveroot);
             await syncSaves(engine, true);
             engine.FS.mkdirTree(config.saveroot + '/saves');
+            if (config.syncsaves) {
+                await this.pullSaves();
+                // Saves made only in this browser (or newer here) go up now.
+                this.pushSaves(false);
+            }
 
             args.push(
                 '-window',
@@ -408,6 +459,81 @@ class Player {
             engine.callMain(args);
         } catch (e) {
             this.fail(e);
+        }
+    }
+
+    /**
+     * Copy server saves that are newer than this browser's into the save directory.
+     *
+     * Failures are not fatal: the game still runs on the browser's own saves.
+     *
+     * @returns {Promise<void>}
+     */
+    async pullSaves() {
+        const dir = this.config.saveroot + '/saves/';
+        try {
+            const [result] = await Promise.all(Ajax.call([{
+                methodname: 'mod_doomed_get_saves',
+                args: {cmid: this.config.cmid},
+            }]));
+            if (!result.enabled) {
+                this.config.syncsaves = false;
+                return;
+            }
+            result.saves.forEach((save) => {
+                if (!SAVE_FILE.test(save.filename)) {
+                    return;
+                }
+                const path = dir + save.filename;
+                const servertime = save.timemodified * 1000;
+                if (servertime > fileTime(this.engine, path)) {
+                    this.engine.FS.writeFile(path, base64ToBytes(save.content));
+                    this.engine.FS.utime(path, servertime, servertime);
+                }
+                this.serverSaveTimes[save.filename] = fileTime(this.engine, path);
+            });
+            await syncSaves(this.engine, false);
+        } catch (e) {
+            Log.warn('mod_doomed: could not fetch saved games from the server: ' + (e.message || e));
+        }
+    }
+
+    /**
+     * Upload every save slot changed since it was last on the server.
+     *
+     * @param {boolean} announce whether to report the outcome in the status line
+     * @returns {Promise<void>}
+     */
+    async pushSaves(announce) {
+        const dir = this.config.saveroot + '/saves/';
+        let names = [];
+        try {
+            names = this.engine.FS.readdir(dir).filter((name) => SAVE_FILE.test(name));
+        } catch (e) {
+            return;
+        }
+        let failed = false;
+        let stored = false;
+        for (const name of names) {
+            const time = fileTime(this.engine, dir + name);
+            if (time <= (this.serverSaveTimes[name] || 0)) {
+                continue;
+            }
+            try {
+                const content = bytesToBase64(this.engine.FS.readFile(dir + name));
+                await Promise.all(Ajax.call([{
+                    methodname: 'mod_doomed_store_save',
+                    args: {cmid: this.config.cmid, filename: name, content},
+                }]));
+                this.serverSaveTimes[name] = time;
+                stored = true;
+            } catch (e) {
+                failed = true;
+                Log.warn('mod_doomed: could not store ' + name + ' on the server: ' + (e.message || e));
+            }
+        }
+        if (announce && (stored || failed)) {
+            await this.setStatus(failed ? 'statussavefailed' : 'statussavestored');
         }
     }
 

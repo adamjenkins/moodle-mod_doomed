@@ -25,7 +25,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'mod_doomed';
-$plugin->version = 2026100100;
+$plugin->version = 2026100101;
 $plugin->release = '0.1.0';
 $plugin->maturity = MATURITY_ALPHA;
 // Moodle 5.2.

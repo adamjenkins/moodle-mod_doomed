@@ -277,6 +277,10 @@ final class lib_test extends advanced_testcase {
         $this->add_attempt($doomed1, $user->id);
         $this->add_attempt($doomed2, $user->id);
         $this->add_attempt($elsewhere, $user->id);
+        $ctx1 = \context_module::instance($doomed1->cmid);
+        $ctxelsewhere = \context_module::instance($elsewhere->cmid);
+        \mod_doomed\local\saves::store($ctx1, (int) $user->id, 'doomsav0.dsg', 'save');
+        \mod_doomed\local\saves::store($ctxelsewhere, (int) $user->id, 'doomsav0.dsg', 'save');
         doomed_update_grades($DB->get_record('doomed', ['id' => $doomed1->id]));
         $this->assertEqualsWithDelta(100.0, $this->gradebook_grade($doomed1, $user->id), 1e-9);
 
@@ -294,6 +298,9 @@ final class lib_test extends advanced_testcase {
         $this->assertSame(0, $DB->count_records('doomed_attempts', ['doomedid' => $doomed1->id]));
         $this->assertSame(0, $DB->count_records('doomed_attempts', ['doomedid' => $doomed2->id]));
         $this->assertSame(1, $DB->count_records('doomed_attempts', ['doomedid' => $elsewhere->id]));
+        // Saved games on the server go too, but only in this course.
+        $this->assertSame([], \mod_doomed\local\saves::get_user_saves($ctx1, (int) $user->id));
+        $this->assertCount(1, \mod_doomed\local\saves::get_user_saves($ctxelsewhere, (int) $user->id));
         // The gradebook grades go with the attempts.
         $this->assertNull($this->gradebook_grade($doomed1, $user->id));
     }

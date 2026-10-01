@@ -74,6 +74,8 @@ class player implements renderable, templatable {
             // shared computer do not leak between accounts or activities.
             'saveroot' => '/doomed/u' . (int) $this->user->id . '/cm' . (int) $this->cm->id,
             'canrecord' => has_capability('mod/doomed:play', $this->context),
+            // Server copies of saves need the same right as recording results.
+            'syncsaves' => \mod_doomed\local\saves::enabled() && has_capability('mod/doomed:play', $this->context),
         ];
     }
 

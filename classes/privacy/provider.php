@@ -24,6 +24,7 @@ use core_privacy\local\request\helper;
 use core_privacy\local\request\transform;
 use core_privacy\local\request\userlist;
 use core_privacy\local\request\writer;
+use mod_doomed\local\saves;
 
 /**
  * Privacy provider for mod_doomed.
@@ -64,12 +65,13 @@ class provider implements
             'timecreated' => 'privacy:metadata:doomed_attempts:timecreated',
         ], 'privacy:metadata:doomed_attempts');
         $collection->add_subsystem_link('core_grades', [], 'privacy:metadata:core_grades');
+        $collection->add_subsystem_link('core_files', [], 'privacy:metadata:core_files');
 
         return $collection;
     }
 
     /**
-     * Get the contexts holding attempts by the given user.
+     * Get the contexts holding attempts or saved games of the given user.
      *
      * @param int $userid the user
      * @return contextlist the contexts
@@ -88,11 +90,18 @@ class provider implements
         ];
         $contextlist = new contextlist();
         $contextlist->add_from_sql($sql, $params);
+
+        // Saved games: the file area's item id is the owner's user id.
+        $sql = "SELECT f.contextid
+                  FROM {files} f
+                 WHERE f.component = :component AND f.filearea = :filearea AND f.itemid = :userid
+                       AND f.filename <> '.'";
+        $contextlist->add_from_sql($sql, ['component' => 'mod_doomed', 'filearea' => saves::AREA, 'userid' => $userid]);
         return $contextlist;
     }
 
     /**
-     * Get the users with attempts in the given context.
+     * Get the users with attempts or saved games in the given context.
      *
      * @param userlist $userlist the userlist to fill, bound to a context
      * @return void
@@ -108,10 +117,20 @@ class provider implements
                   JOIN {doomed_attempts} a ON a.doomedid = cm.instance
                  WHERE cm.id = :cmid";
         $userlist->add_from_sql('userid', $sql, ['modname' => 'doomed', 'cmid' => $context->instanceid]);
+
+        $sql = "SELECT f.itemid AS userid
+                  FROM {files} f
+                 WHERE f.contextid = :contextid AND f.component = :component AND f.filearea = :filearea
+                       AND f.filename <> '.'";
+        $userlist->add_from_sql(
+            'userid',
+            $sql,
+            ['contextid' => $context->id, 'component' => 'mod_doomed', 'filearea' => saves::AREA]
+        );
     }
 
     /**
-     * Export the attempts of the approved user in each approved context.
+     * Export the attempts and saved games of the approved user in each approved context.
      *
      * @param approved_contextlist $contextlist the approved contexts
      * @return void
@@ -130,7 +149,8 @@ class provider implements
                 ['doomedid' => $doomedid, 'userid' => $user->id],
                 'timecreated ASC, id ASC'
             );
-            if (!$records) {
+            $savefiles = saves::get_user_saves($context, (int) $user->id);
+            if (!$records && !$savefiles) {
                 continue;
             }
 
@@ -143,11 +163,19 @@ class provider implements
             $contextdata->attempts = $attempts;
             helper::export_context_files($context, $user);
             writer::with_context($context)->export_data([], $contextdata);
+            if ($savefiles) {
+                writer::with_context($context)->export_area_files(
+                    [get_string('privacy:savedgames', 'mod_doomed')],
+                    'mod_doomed',
+                    saves::AREA,
+                    (int) $user->id
+                );
+            }
         }
     }
 
     /**
-     * Delete every user's attempts in a context.
+     * Delete every user's attempts and saved games in a context.
      *
      * @param \context $context the context
      * @return void
@@ -158,11 +186,12 @@ class provider implements
         $doomedid = self::get_doomedid($context);
         if ($doomedid !== null) {
             $DB->delete_records('doomed_attempts', ['doomedid' => $doomedid]);
+            saves::delete($context);
         }
     }
 
     /**
-     * Delete the approved user's attempts in each approved context.
+     * Delete the approved user's attempts and saved games in each approved context.
      *
      * @param approved_contextlist $contextlist the approved contexts
      * @return void
@@ -175,12 +204,13 @@ class provider implements
             $doomedid = self::get_doomedid($context);
             if ($doomedid !== null) {
                 $DB->delete_records('doomed_attempts', ['doomedid' => $doomedid, 'userid' => $userid]);
+                saves::delete($context, (int) $userid);
             }
         }
     }
 
     /**
-     * Delete the attempts of the approved users in one context.
+     * Delete the attempts and saved games of the approved users in one context.
      *
      * @param approved_userlist $userlist the approved users, bound to a context
      * @return void
@@ -196,6 +226,9 @@ class provider implements
         [$insql, $params] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED);
         $params['doomedid'] = $doomedid;
         $DB->delete_records_select('doomed_attempts', "doomedid = :doomedid AND userid $insql", $params);
+        foreach ($userids as $userid) {
+            saves::delete($userlist->get_context(), (int) $userid);
+        }
     }
 
     /**
