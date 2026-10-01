@@ -33,6 +33,14 @@ if ($ADMIN->fulltree) {
         \mod_doomed\local\options::skills()
     ));
 
+    $settings->add(new admin_setting_configselect(
+        'mod_doomed/defaultgrademode',
+        new lang_string('defaultgrademode', 'mod_doomed'),
+        new lang_string('defaultgrademode_desc', 'mod_doomed'),
+        \mod_doomed\local\grading::MODE_NONE,
+        \mod_doomed\local\grading::mode_options()
+    ));
+
     $settings->add(new admin_setting_configcheckbox(
         'mod_doomed/allowiwadupload',
         new lang_string('allowiwadupload', 'mod_doomed'),

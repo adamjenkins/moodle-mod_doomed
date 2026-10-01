@@ -25,11 +25,20 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+import Ajax from 'core/ajax';
 import {getString} from 'core/str';
 import Log from 'core/log';
 
 /** @type {string} Name of the DOM event dispatched on the player root for every game event. */
 export const GAME_EVENT = 'mod_doomed:gameevent';
+
+/**
+ * Format a grade for display: at most two decimals, no trailing zeros.
+ *
+ * @param {number} value the grade
+ * @returns {string}
+ */
+const formatGrade = (value) => String(Math.round(value * 100) / 100);
 
 /**
  * Load the engine factory (createDoomedEngine) through RequireJS.
@@ -189,6 +198,7 @@ class Player {
         this.engine = null;
         this.running = false;
         this.statusSequence = 0;
+        this.levelTotals = null;
 
         this.startButton.addEventListener('click', () => this.start());
         this.fullscreenButton.addEventListener('click', () => this.toggleFullscreen());
@@ -271,6 +281,60 @@ class Player {
         this.root.dispatchEvent(new CustomEvent(GAME_EVENT, {detail: event, bubbles: true}));
         if (event.type === 'saved' && this.engine) {
             syncSaves(this.engine, false);
+        }
+        if (event.type === 'levelstart') {
+            this.levelTotals = {
+                totalkills: event.totalkills,
+                totalitems: event.totalitems,
+                totalsecrets: event.totalsecrets,
+            };
+        }
+        if ((event.type === 'levelcomplete' || event.type === 'death') && this.config.canrecord) {
+            this.submitResult(event);
+        }
+    }
+
+    /**
+     * Send a level result to the server.
+     *
+     * @param {Object} event levelcomplete or death event from the engine
+     * @returns {Promise<void>}
+     */
+    async submitResult(event) {
+        const args = {
+            cmid: this.config.cmid,
+            outcome: event.type === 'levelcomplete' ? 'completed' : 'died',
+            map: event.map,
+            skill: event.skill,
+            kills: event.kills,
+            totalkills: event.totalkills || 0,
+            items: event.items,
+            totalitems: event.totalitems || 0,
+            secrets: event.secrets,
+            totalsecrets: event.totalsecrets || 0,
+            timetics: event.timetics,
+            partics: event.partics || 0,
+        };
+        if (event.type === 'death' && this.levelTotals) {
+            // The death event carries progress; the totals come from levelstart.
+            Object.assign(args, this.levelTotals);
+        }
+        try {
+            const [result] = await Promise.all(Ajax.call([{methodname: 'mod_doomed_submit_result', args}]));
+            if (event.type !== 'levelcomplete') {
+                return;
+            }
+            if (result.counted && result.grade !== null && result.maxgrade !== null) {
+                await this.setStatus('statusrecordedgrade', {
+                    grade: formatGrade(result.grade),
+                    maxgrade: formatGrade(result.maxgrade),
+                });
+            } else {
+                await this.setStatus(result.counted ? 'statusrecorded' : 'statusrecordednotcounted');
+            }
+        } catch (e) {
+            Log.error('mod_doomed: could not record result: ' + (e.message || e));
+            await this.setStatus('statusrecordfailed');
         }
     }
 

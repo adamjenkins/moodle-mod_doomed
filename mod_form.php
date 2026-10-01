@@ -26,6 +26,7 @@ defined('MOODLE_INTERNAL') || die();
 
 require_once($CFG->dirroot . '/course/moodleform_mod.php');
 
+use mod_doomed\local\grading;
 use mod_doomed\local\wad;
 use mod_doomed\local\wads;
 
@@ -114,8 +115,120 @@ class mod_doomed_mod_form extends moodleform_mod {
         $mform->addElement('select', 'skill', get_string('skill', 'mod_doomed'), \mod_doomed\local\options::skills());
         $mform->setDefault('skill', (int) (get_config('mod_doomed', 'defaultskill') ?: 3));
 
+        $this->add_grading_elements();
+
         $this->standard_coursemodule_elements();
         $this->add_action_buttons();
+    }
+
+    /**
+     * Grading section: the standard grade elements plus how Doomed computes grades.
+     */
+    protected function add_grading_elements(): void {
+        $mform = $this->_form;
+
+        $this->standard_grading_coursemodule_elements();
+
+        $mode = $mform->createElement(
+            'select',
+            'grademode',
+            get_string('grademode', 'mod_doomed'),
+            grading::mode_options()
+        );
+        $mform->insertElementBefore($mode, 'grade');
+        $mform->addHelpButton('grademode', 'grademode', 'mod_doomed');
+        $mform->setDefault('grademode', (int) get_config('mod_doomed', 'defaultgrademode'));
+        $mform->hideIf('grade', 'grademode', 'eq', grading::MODE_NONE);
+        $mform->hideIf('gradecat', 'grademode', 'eq', grading::MODE_NONE);
+        $mform->hideIf('gradepass', 'grademode', 'eq', grading::MODE_NONE);
+
+        $weights = [];
+        foreach (['weightkills', 'weightitems', 'weightsecrets'] as $field) {
+            $weights[] = $mform->createElement('static', $field . 'label', '', get_string($field, 'mod_doomed'));
+            $weights[] = $mform->createElement('text', $field, get_string($field, 'mod_doomed'), ['size' => 3]);
+            $mform->setType($field, PARAM_INT);
+            $mform->setDefault($field, 1);
+        }
+        $mform->addGroup($weights, 'weightsgroup', get_string('weights', 'mod_doomed'), ' ', false);
+        $mform->addHelpButton('weightsgroup', 'weights', 'mod_doomed');
+        $mform->hideIf('weightsgroup', 'grademode', 'neq', grading::MODE_PERCENTAGE);
+
+        $bonus = [
+            $mform->createElement('checkbox', 'timebonusenabled', '', get_string('enable')),
+            $mform->createElement('text', 'timebonus', get_string('timebonus', 'mod_doomed'), ['size' => 3]),
+        ];
+        $mform->setType('timebonus', PARAM_INT);
+        $mform->setDefault('timebonus', 10);
+        $mform->addGroup($bonus, 'timebonusgroup', get_string('timebonus', 'mod_doomed'), ' ', false);
+        $mform->addHelpButton('timebonusgroup', 'timebonus', 'mod_doomed');
+        $mform->hideIf('timebonusgroup', 'grademode', 'neq', grading::MODE_PERCENTAGE);
+        $mform->disabledIf('timebonus', 'timebonusenabled', 'notchecked');
+
+        $mform->addElement('select', 'grademethod', get_string('grademethod', 'mod_doomed'), grading::method_options());
+        $mform->addHelpButton('grademethod', 'grademethod', 'mod_doomed');
+        $mform->setDefault('grademethod', grading::METHOD_HIGHEST);
+        $mform->hideIf('grademethod', 'grademode', 'eq', grading::MODE_NONE);
+    }
+
+    /**
+     * Custom completion rules.
+     *
+     * @return string[] names of the added elements
+     */
+    public function add_completion_rules() {
+        $mform = $this->_form;
+        $suffix = $this->get_suffix();
+
+        $mapel = 'completionmap' . $suffix;
+        $mform->addElement('checkbox', $mapel, '', get_string('completionmap', 'mod_doomed'));
+        $mform->addHelpButton($mapel, 'completionmap', 'mod_doomed');
+
+        $enabledel = 'completionmingradeenabled' . $suffix;
+        $gradeel = 'completionmingrade' . $suffix;
+        $groupel = 'completionmingradegroup' . $suffix;
+        $group = [
+            $mform->createElement('checkbox', $enabledel, '', get_string('completionmingrade', 'mod_doomed')),
+            $mform->createElement('float', $gradeel, get_string('completionmingrade', 'mod_doomed'), ['size' => 5]),
+        ];
+        $mform->addGroup($group, $groupel, '', ' ', false);
+        $mform->disabledIf($gradeel, $enabledel, 'notchecked');
+
+        return [$mapel, $groupel];
+    }
+
+    /**
+     * Whether any custom completion rule is enabled.
+     *
+     * @param array $data submitted data
+     * @return bool
+     */
+    public function completion_rule_enabled($data) {
+        $suffix = $this->get_suffix();
+        return !empty($data['completionmap' . $suffix])
+            || (!empty($data['completionmingradeenabled' . $suffix]) && !empty($data['completionmingrade' . $suffix]));
+    }
+
+    /**
+     * Zero the values of unticked optional settings.
+     *
+     * @param stdClass $data submitted data, changed in place
+     */
+    public function data_postprocessing($data) {
+        parent::data_postprocessing($data);
+        if (empty($data->timebonusenabled) || (int) ($data->grademode ?? 0) !== grading::MODE_PERCENTAGE) {
+            $data->timebonus = 0;
+        }
+        if (!empty($data->completionunlocked)) {
+            $suffix = $this->get_suffix();
+            $completion = $data->{'completion' . $suffix} ?? COMPLETION_TRACKING_NONE;
+            $automatic = $completion == COMPLETION_TRACKING_AUTOMATIC;
+            if (!$automatic || empty($data->{'completionmap' . $suffix})) {
+                $data->{'completionmap' . $suffix} = 0;
+            }
+            if (!$automatic || empty($data->{'completionmingradeenabled' . $suffix})) {
+                $data->{'completionmingrade' . $suffix} = 0;
+            }
+        }
     }
 
     /**
@@ -131,6 +244,14 @@ class mod_doomed_mod_form extends moodleform_mod {
             file_prepare_draft_area($draftitemid, $contextid, 'mod_doomed', $area, 0, wads::filemanager_options());
             $defaultvalues[$field] = $draftitemid;
         }
+
+        $defaultvalues['timebonusenabled'] = !empty($defaultvalues['timebonus']) ? 1 : 0;
+        if (empty($defaultvalues['timebonus'])) {
+            $defaultvalues['timebonus'] = 10;
+        }
+        $suffix = $this->get_suffix();
+        $defaultvalues['completionmingradeenabled' . $suffix] =
+            !empty($defaultvalues['completionmingrade' . $suffix]) ? 1 : 0;
     }
 
     /**
@@ -145,6 +266,7 @@ class mod_doomed_mod_form extends moodleform_mod {
      */
     public function validation($data, $files) {
         $errors = parent::validation($data, $files);
+        $errors += $this->validate_grading($data);
 
         $source = $data['iwadsource'] ?? wads::SOURCE_FREEDOOM1;
         if (
@@ -211,6 +333,51 @@ class mod_doomed_mod_form extends moodleform_mod {
             );
         } else if (!in_array($startmap, $maps, true)) {
             $errors['startmap'] = get_string('startmapnotfound', 'mod_doomed', $startmap);
+        }
+        return $errors;
+    }
+
+    /**
+     * Validate the grading settings and the minimum grade completion rule.
+     *
+     * @param array $data submitted data
+     * @return array errors
+     */
+    protected function validate_grading(array $data): array {
+        $errors = [];
+        $mode = (int) ($data['grademode'] ?? grading::MODE_NONE);
+        $maxgrade = (float) ($data['grade'] ?? 0);
+        if ($mode !== grading::MODE_NONE && $maxgrade <= 0) {
+            $errors['grade'] = get_string('gradepointsrequired', 'mod_doomed');
+        }
+        if ($mode === grading::MODE_PERCENTAGE) {
+            $sum = 0;
+            foreach (['weightkills', 'weightitems', 'weightsecrets'] as $field) {
+                $weight = (int) ($data[$field] ?? 0);
+                if ($weight < 0 || $weight > 100) {
+                    $errors['weightsgroup'] = get_string('weightsrange', 'mod_doomed');
+                }
+                $sum += $weight;
+            }
+            if ($sum <= 0 && empty($errors['weightsgroup'])) {
+                $errors['weightsgroup'] = get_string('weightsrange', 'mod_doomed');
+            }
+            if (!empty($data['timebonusenabled'])) {
+                $bonus = (int) ($data['timebonus'] ?? 0);
+                if ($bonus < 1 || $bonus > 100) {
+                    $errors['timebonusgroup'] = get_string('timebonusrange', 'mod_doomed');
+                }
+            }
+        }
+
+        $suffix = $this->get_suffix();
+        if (!empty($data['completionmingradeenabled' . $suffix])) {
+            $mingrade = (float) ($data['completionmingrade' . $suffix] ?? 0);
+            if ($mode === grading::MODE_NONE) {
+                $errors['completionmingradegroup' . $suffix] = get_string('completionmingradeneedsgrade', 'mod_doomed');
+            } else if ($mingrade <= 0 || ($maxgrade > 0 && $mingrade > $maxgrade)) {
+                $errors['completionmingradegroup' . $suffix] = get_string('completionmingraderange', 'mod_doomed');
+            }
         }
         return $errors;
     }

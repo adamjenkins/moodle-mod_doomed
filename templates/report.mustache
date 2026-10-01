@@ -1,0 +1,106 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template mod_doomed/report
+
+    Attempts report for teachers: one table section per student.
+
+    Context variables required for this template:
+    * graded - whether the activity is graded
+    * maxgrade - formatted maximum grade
+    * startmap - the activity's starting map
+    * hasstudents - whether anyone has attempts
+    * students - list of students with fullname, profileurl, attemptcount, grade and attempts
+
+    Example context (json):
+    {
+        "graded": true,
+        "maxgrade": "100",
+        "startmap": "E1M1",
+        "hasstudents": true,
+        "students": [
+            {
+                "fullname": "Sam Student",
+                "profileurl": "#",
+                "attemptcount": 2,
+                "grade": "75",
+                "attempts": [
+                    {"date": "1/10/26, 14:00", "outcome": "Completed", "completed": true, "map": "E1M1", "skill": 3,
+                     "kills": "20 / 29", "items": "30 / 49", "secrets": "2 / 4", "time": "3:12", "par": "0:30",
+                     "counted": true, "grade": "75"},
+                    {"date": "1/10/26, 13:50", "outcome": "Died", "completed": false, "map": "E1M1", "skill": 3,
+                     "kills": "4 / 29", "items": "6 / 49", "secrets": "0 / 4", "time": "0:45", "par": "",
+                     "counted": false, "grade": ""}
+                ]
+            }
+        ]
+    }
+}}
+<div class="mod-doomed-report">
+    <p>{{#str}}reportintro, mod_doomed, {{startmap}}{{/str}}</p>
+    {{#hasstudents}}
+    <div class="table-responsive">
+        <table class="generaltable table-sm">
+            <caption class="visually-hidden">{{#str}}attemptsreport, mod_doomed{{/str}}</caption>
+            <thead>
+                <tr>
+                    <th scope="col">{{#str}}date{{/str}}</th>
+                    <th scope="col">{{#str}}outcome, mod_doomed{{/str}}</th>
+                    <th scope="col">{{#str}}map, mod_doomed{{/str}}</th>
+                    <th scope="col">{{#str}}skill, mod_doomed{{/str}}</th>
+                    <th scope="col">{{#str}}kills, mod_doomed{{/str}}</th>
+                    <th scope="col">{{#str}}items, mod_doomed{{/str}}</th>
+                    <th scope="col">{{#str}}secrets, mod_doomed{{/str}}</th>
+                    <th scope="col">{{#str}}leveltime, mod_doomed{{/str}}</th>
+                    <th scope="col">{{#str}}partime, mod_doomed{{/str}}</th>
+                    {{#graded}}<th scope="col">{{#str}}attemptgrade, mod_doomed, {{maxgrade}}{{/str}}</th>{{/graded}}
+                </tr>
+            </thead>
+            {{#students}}
+            <tbody>
+                <tr class="table-light">
+                    <th scope="rowgroup" colspan="{{#graded}}10{{/graded}}{{^graded}}9{{/graded}}">
+                        <a href="{{profileurl}}">{{fullname}}</a>
+                        <span class="fw-normal">
+                            · {{#str}}attemptcount, mod_doomed, {{attemptcount}}{{/str}}
+                            {{#graded}}· {{#str}}currentgrade, mod_doomed{{/str}}: {{#grade}}{{grade}}{{/grade}}{{^grade}}{{#str}}nograde, mod_doomed{{/str}}{{/grade}}{{/graded}}
+                        </span>
+                    </th>
+                </tr>
+                {{#attempts}}
+                <tr>
+                    <td>{{date}}</td>
+                    <td>{{outcome}}{{^counted}}{{#completed}} <span class="badge bg-secondary">{{#str}}notcounted, mod_doomed{{/str}}</span>{{/completed}}{{/counted}}</td>
+                    <td>{{map}}</td>
+                    <td>{{skill}}</td>
+                    <td>{{kills}}</td>
+                    <td>{{items}}</td>
+                    <td>{{secrets}}</td>
+                    <td>{{time}}</td>
+                    <td>{{par}}</td>
+                    {{#graded}}<td>{{grade}}</td>{{/graded}}
+                </tr>
+                {{/attempts}}
+            </tbody>
+            {{/students}}
+        </table>
+    </div>
+    {{/hasstudents}}
+    {{^hasstudents}}
+    <p>{{#str}}noattempts, mod_doomed{{/str}}</p>
+    {{/hasstudents}}
+</div>
