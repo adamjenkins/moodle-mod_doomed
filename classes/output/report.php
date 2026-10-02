@@ -125,12 +125,22 @@ class report implements renderable, templatable {
             }
             $total = count($attempts[$userid]);
             $gradetext = $grade === null ? get_string('nograde', 'mod_doomed') : format_float($grade, 2, true, true);
+            $levelparts = [];
+            foreach (grading::level_grades($this->doomed, $attempts[$userid]) as $map => $levelgrade) {
+                $levelparts[] = get_string('levelgrade', 'mod_doomed', (object) [
+                    'map' => $map,
+                    'grade' => $levelgrade === null
+                        ? get_string('nograde', 'mod_doomed')
+                        : format_float($levelgrade, 2, true, true),
+                ]);
+            }
             $students[] = [
                 'fullname' => fullname($user, has_capability('moodle/site:viewfullnames', $this->context)),
                 'profileurl' => (new \moodle_url('/user/view.php', ['id' => $userid, 'course' => $this->cm->course]))->out(false),
                 'summary' => $graded
                     ? get_string('studentsummary', 'mod_doomed', (object) ['attempts' => $total, 'grade' => $gradetext])
                     : get_string('studentsummaryungraded', 'mod_doomed', $total),
+                'levelgrades' => $graded ? get_string('levelgrades', 'mod_doomed', implode(', ', $levelparts)) : '',
                 'truncated' => $total > self::MAX_ROWS
                     ? get_string('showinglatest', 'mod_doomed', (object) ['shown' => self::MAX_ROWS, 'total' => $total])
                     : '',
@@ -141,7 +151,7 @@ class report implements renderable, templatable {
         return [
             'graded' => $graded,
             'maxgrade' => $graded ? format_float((float) $this->doomed->grade, 2, true, true) : '',
-            'startmap' => $this->doomed->startmap,
+            'levels' => implode(', ', \mod_doomed\local\levels::from_record($this->doomed)),
             'hasstudents' => !empty($students),
             'students' => $students,
         ];

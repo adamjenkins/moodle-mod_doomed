@@ -50,7 +50,7 @@ final class backup_restore_test extends \advanced_testcase {
 
     /** @var string[] Settings fields that must come across unchanged. */
     protected const SETTINGS = [
-        'name', 'intro', 'introformat', 'iwadsource', 'startmap', 'skill', 'grademode', 'grade',
+        'name', 'intro', 'introformat', 'iwadsource', 'startmap', 'levels', 'freeplay', 'skill', 'grademode', 'grade',
         'weightkills', 'weightitems', 'weightsecrets', 'timebonus', 'grademethod', 'completionmap',
         'completionmingrade', 'timecreated', 'timemodified',
     ];
@@ -332,7 +332,7 @@ final class backup_restore_test extends \advanced_testcase {
             'filename' => 'doom2.wad',
         ], $bytes);
         $DB->update_record('doomed', (object) ['id' => $this->doomed->id, 'iwadsource' => wads::SOURCE_UPLOAD,
-            'startmap' => 'MAP01']);
+            'startmap' => 'MAP01', 'levels' => 'MAP01']);
     }
 
     /**
@@ -430,5 +430,39 @@ final class backup_restore_test extends \advanced_testcase {
             false
         );
         $this->assertSame([], $files);
+    }
+
+    /**
+     * A level list and the carry-on setting come across unchanged.
+     */
+    public function test_level_list_round_trip(): void {
+        global $DB;
+        $DB->update_record('doomed', (object) ['id' => $this->doomed->id, 'levels' => 'E1M2,E1M1,E1M5',
+            'startmap' => 'E1M2', 'freeplay' => 1]);
+
+        $restored = $this->backup_and_restore(false);
+
+        $this->assertSame('E1M2,E1M1,E1M5', $restored->levels);
+        $this->assertSame('E1M2', $restored->startmap);
+        $this->assertSame('1', (string) $restored->freeplay);
+    }
+
+    /**
+     * A backup made before level lists existed has only startmap: it becomes a one-level list.
+     */
+    public function test_restore_backup_without_level_list(): void {
+        global $DB;
+        $DB->update_record('doomed', (object) ['id' => $this->doomed->id, 'levels' => 'E1M3,E1M1',
+            'startmap' => 'E1M3', 'freeplay' => 1]);
+
+        $restored = $this->backup_and_restore(false, 0, function (string $xml): string {
+            $edited = preg_replace('~<levels>[^<]*</levels>|<freeplay>[^<]*</freeplay>~', '', $xml, -1, $count);
+            $this->assertSame(2, $count);
+            return $edited;
+        });
+
+        $this->assertSame('E1M3', $restored->levels);
+        $this->assertSame('E1M3', $restored->startmap);
+        $this->assertSame('0', (string) $restored->freeplay);
     }
 }

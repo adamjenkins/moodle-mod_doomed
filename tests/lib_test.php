@@ -180,8 +180,10 @@ final class lib_test extends advanced_testcase {
         $data->instance = $doomed->id;
         $data->coursemodule = $doomed->cmid;
         $data->grade = 80;
-        $data->startmap = 'e1m2';
+        // The form edits the level list; startmap follows its first entry.
+        $data->levels = 'e1m2, e1m4';
         $this->assertTrue(doomed_update_instance(clone $data));
+        $this->assertSame('E1M2,E1M4', $DB->get_field('doomed', 'levels', ['id' => $doomed->id]));
         $this->assertSame('E1M2', $DB->get_field('doomed', 'startmap', ['id' => $doomed->id]));
         $this->assertEqualsWithDelta(80.0, (float) $this->grade_item($doomed)->grademax, 1e-9);
 
@@ -232,7 +234,7 @@ final class lib_test extends advanced_testcase {
         $this->assertEqualsWithDelta(100.0, $this->gradebook_grade($doomed, $u2->id), 1e-9);
 
         // Move the start map: no attempt counts any more and the old grades are removed.
-        $record->startmap = 'E1M2';
+        $record->levels = 'E1M2';
         doomed_update_instance(clone $record);
         $this->assertNull($this->gradebook_grade($doomed, $u1->id));
         $this->assertNull($this->gradebook_grade($doomed, $u2->id));
@@ -370,11 +372,11 @@ final class lib_test extends advanced_testcase {
         $modinfo = get_fast_modinfo($this->course->id);
 
         $this->assertSame(
-            ['Complete map E3M2', 'Achieve a grade of at least 30'],
+            ['Complete every level: E3M2', 'Achieve a grade of at least 30'],
             mod_doomed_get_completion_active_rule_descriptions($modinfo->get_cm($both->cmid))
         );
         $this->assertSame(
-            ['Complete map E1M1'],
+            ['Complete every level: E1M1'],
             mod_doomed_get_completion_active_rule_descriptions($modinfo->get_cm($maponly->cmid))
         );
         $this->assertSame(

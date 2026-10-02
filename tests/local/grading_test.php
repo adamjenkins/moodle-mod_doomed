@@ -343,4 +343,55 @@ final class grading_test extends advanced_testcase {
         $this->assertSame([(int) $u2->id], array_map('intval', array_keys($one)));
         $this->assertSame([], grading::gradebook_grades($doomed, (int) $u3->id));
     }
+
+    /**
+     * Three listed levels: each graded on its own, the activity grade their average, unplayed 0.
+     */
+    public function test_per_level_average(): void {
+        $doomed = self::doomed(['levels' => 'E1M1,E1M2,E1M3']);
+        $attempts = [
+            // E1M1: 1/2 items, 0/0 kills and secrets -> (1 + 0.5 + 1) / 3 = 83.33333%.
+            self::attempt(['id' => 1, 'map' => 'E1M1', 'items' => 1, 'totalitems' => 2]),
+            // E1M1 again, 2/2 items -> 100%: highest wins for this level.
+            self::attempt(['id' => 2, 'map' => 'E1M1', 'items' => 2, 'totalitems' => 2, 'timecreated' => 900]),
+            // E1M2: 1/4 kills -> (0.25 + 1 + 1) / 3 = 75%.
+            self::attempt(['id' => 3, 'map' => 'E1M2', 'kills' => 1, 'totalkills' => 4]),
+            // E1M4 is not listed: recorded but never graded.
+            self::attempt(['id' => 4, 'map' => 'E1M4']),
+            // A death on E1M3 earns nothing, so E1M3 stays unplayed.
+            self::attempt(['id' => 5, 'map' => 'E1M3', 'outcome' => grading::OUTCOME_DIED]),
+        ];
+        $this->assertSame(['E1M1' => 100.0, 'E1M2' => 75.0, 'E1M3' => null], grading::level_grades($doomed, $attempts));
+        // Average: (100 + 75 + 0) / 3 = 58.33333.
+        $this->assertEqualsWithDelta(58.33333, grading::aggregate($doomed, $attempts), 1e-9);
+        $this->assertSame(['E1M1', 'E1M2'], grading::completed_levels($doomed, $attempts));
+    }
+
+    /**
+     * Keep-last applies per level: each level keeps its own most recent counting attempt.
+     */
+    public function test_per_level_last(): void {
+        $doomed = self::doomed(['levels' => 'E1M2,E1M1', 'grademethod' => grading::METHOD_LAST,
+            'grademode' => grading::MODE_COMPLETION, 'grade' => 10]);
+        $attempts = [
+            self::attempt(['id' => 1, 'map' => 'E1M1', 'timecreated' => 100]),
+            self::attempt(['id' => 2, 'map' => 'E1M2', 'timecreated' => 200]),
+            // The last E1M2 attempt is a death: it does not count, so E1M2 keeps its completion.
+            self::attempt(['id' => 3, 'map' => 'E1M2', 'outcome' => grading::OUTCOME_DIED, 'timecreated' => 300]),
+        ];
+        // Pass/fail: 10 per completed level, in list order E1M2 then E1M1.
+        $this->assertSame(['E1M2' => 10.0, 'E1M1' => 10.0], grading::level_grades($doomed, $attempts));
+        $this->assertEqualsWithDelta(10.0, grading::aggregate($doomed, $attempts), 1e-9);
+        $this->assertSame(['E1M2', 'E1M1'], grading::completed_levels($doomed, $attempts));
+    }
+
+    /**
+     * A record without a level list (as before lists existed) grades its starting map alone.
+     */
+    public function test_levels_fall_back_to_startmap(): void {
+        $doomed = self::doomed(['startmap' => 'E1M2']);
+        $this->assertSame(['E1M2'], levels::from_record($doomed));
+        $this->assertTrue(grading::attempt_counts($doomed, self::attempt(['map' => 'e1m2'])));
+        $this->assertFalse(grading::attempt_counts($doomed, self::attempt(['map' => 'E1M1'])));
+    }
 }

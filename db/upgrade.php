@@ -29,6 +29,24 @@
  * @return bool true
  */
 function xmldb_doomed_upgrade($oldversion) {
-    // No upgrade steps yet: the first release installs from install.xml.
+    global $DB;
+    $dbman = $DB->get_manager();
+
+    if ($oldversion < 2026100102) {
+        // Activities play an ordered list of levels instead of a single starting map.
+        $table = new xmldb_table('doomed');
+        $field = new xmldb_field('levels', XMLDB_TYPE_CHAR, '255', null, XMLDB_NOTNULL, null, 'E1M1', 'startmap');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+            // Existing activities keep exactly their single starting map.
+            $DB->execute('UPDATE {doomed} SET levels = startmap');
+        }
+        $field = new xmldb_field('freeplay', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'levels');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        upgrade_mod_savepoint(true, 2026100102, 'doomed');
+    }
+
     return true;
 }

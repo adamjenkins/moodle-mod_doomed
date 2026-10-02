@@ -328,6 +328,10 @@ class Player {
                 this.pushSaves(true);
             }
         }
+        if (event.type === 'finished') {
+            // The engine has gone back to its title screen after the last level.
+            this.setStatus('statusfinished');
+        }
         if (event.type === 'levelstart') {
             this.levelTotals = {
                 totalkills: event.totalkills,
@@ -452,8 +456,12 @@ class Player {
                 '-config', config.saveroot + '/doomed.cfg',
                 '-extraconfig', config.saveroot + '/doomed-extra.cfg',
                 '-skill', String(config.skill),
-                '-warp', ...warpArgs(config.startmap),
+                '-warp', ...warpArgs(config.levels[0]),
+                '-doomedlevels', config.levels.join(','),
             );
+            if (config.freeplay) {
+                args.push('-doomedfreeplay');
+            }
             this.fullscreenButton.disabled = false;
             this.canvas.focus();
             engine.callMain(args);

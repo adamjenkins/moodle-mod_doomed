@@ -1,0 +1,468 @@
+From a2bbd720dbb096f59936b3cbd77b0d5ffe9e1740 Mon Sep 17 00:00:00 2001
+From: Adam Jenkins <adam@wisecat.net>
+Date: Fri, 2 Oct 2026 10:11:26 +0000
+Subject: [PATCH 3/3] mod_doomed level list: route play through the activity's
+ levels and end the game after the last
+
+---
+ src/doom/CMakeLists.txt  |   1 +
+ src/doom/doomed_bridge.c |   7 ++
+ src/doom/doomed_bridge.h |   1 +
+ src/doom/doomed_levels.c | 238 +++++++++++++++++++++++++++++++++++++++
+ src/doom/doomed_levels.h |  43 +++++++
+ src/doom/g_game.c        |  37 +++++-
+ 6 files changed, 325 insertions(+), 2 deletions(-)
+ create mode 100644 src/doom/doomed_levels.c
+ create mode 100644 src/doom/doomed_levels.h
+
+diff --git a/src/doom/CMakeLists.txt b/src/doom/CMakeLists.txt
+index e17671da..e01b2e48 100644
+--- a/src/doom/CMakeLists.txt
++++ b/src/doom/CMakeLists.txt
+@@ -18,6 +18,7 @@ add_library(doom STATIC
+             doomdef.c       doomdef.h
+             doomstat.c      doomstat.h
+             doomed_bridge.c doomed_bridge.h
++            doomed_levels.c doomed_levels.h
+                             d_player.h
+             dstrings.c      dstrings.h
+                             d_textur.h
+diff --git a/src/doom/doomed_bridge.c b/src/doom/doomed_bridge.c
+index 0b760f4f..dd3febf8 100644
+--- a/src/doom/doomed_bridge.c
++++ b/src/doom/doomed_bridge.c
+@@ -141,6 +141,12 @@ void DOOMED_GameSaved(void)
+     Post("saved", "");
+ }
+ 
++// The activity's level list is finished; the engine returns to the title.
++void DOOMED_GameFinished(void)
++{
++    Post("finished", "");
++}
++
+ #else
+ 
+ void DOOMED_GameStart(void) {}
+@@ -148,5 +154,6 @@ void DOOMED_LevelStart(void) {}
+ void DOOMED_LevelComplete(wbstartstruct_t *wbs) { (void) wbs; }
+ void DOOMED_PlayerDeath(mobj_t *target) { (void) target; }
+ void DOOMED_GameSaved(void) {}
++void DOOMED_GameFinished(void) {}
+ 
+ #endif
+diff --git a/src/doom/doomed_bridge.h b/src/doom/doomed_bridge.h
+index 585657d7..2a5e6330 100644
+--- a/src/doom/doomed_bridge.h
++++ b/src/doom/doomed_bridge.h
+@@ -29,5 +29,6 @@ void DOOMED_LevelStart(void);
+ void DOOMED_LevelComplete(wbstartstruct_t *wbs);
+ void DOOMED_PlayerDeath(mobj_t *target);
+ void DOOMED_GameSaved(void);
++void DOOMED_GameFinished(void);
+ 
+ #endif
+diff --git a/src/doom/doomed_levels.c b/src/doom/doomed_levels.c
+new file mode 100644
+index 00000000..27a45414
+--- /dev/null
++++ b/src/doom/doomed_levels.c
+@@ -0,0 +1,238 @@
++//
++// Copyright(C) 2026 Adam Jenkins
++//
++// This program is free software; you can redistribute it and/or
++// modify it under the terms of the GNU General Public License
++// as published by the Free Software Foundation; either version 2
++// of the License, or (at your option) any later version.
++//
++// This program is distributed in the hope that it will be useful,
++// but WITHOUT ANY WARRANTY; without even the implied warranty of
++// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++// GNU General Public License for more details.
++//
++// DESCRIPTION:
++//  Level list for Moodle mod_doomed. See doomed_levels.h.
++//
++
++#include <stdio.h>
++#include <string.h>
++#include <ctype.h>
++
++#include "doomdef.h"
++#include "doomstat.h"
++#include "d_main.h"
++#include "m_argv.h"
++#include "m_misc.h"
++
++#include "doomed_bridge.h"
++#include "doomed_levels.h"
++
++#define MAX_LEVELS 32
++
++typedef enum
++{
++    ROUTE_NONE,     // normal game behaviour
++    ROUTE_NEXT,     // go to route_episode/route_map after the intermission
++    ROUTE_FINISH,   // the list is done: end the game after the intermission
++    ROUTE_VICTORY   // freeplay past a listed ExM8: the episode's normal ending
++} route_t;
++
++static char levels[MAX_LEVELS][9];
++static int numlevels = -1;
++static boolean freeplay;
++
++static route_t route = ROUTE_NONE;
++static int route_episode;
++static int route_map;
++
++// Parse ExMy or MAPxx. Returns false for anything else.
++static boolean ParseMapName(const char *name, int *episode, int *map)
++{
++    int e, m;
++    char tail;
++
++    if (sscanf(name, "E%1dM%1d%c", &e, &m, &tail) == 2 && e >= 1 && m >= 1)
++    {
++        *episode = e;
++        *map = m;
++        return true;
++    }
++    if (sscanf(name, "MAP%2d%c", &m, &tail) == 1 && m >= 1 && strlen(name) == 5)
++    {
++        *episode = 1;
++        *map = m;
++        return true;
++    }
++    return false;
++}
++
++static void MapName(int episode, int map, char *buf, size_t len)
++{
++    if (gamemode == commercial)
++    {
++        M_snprintf(buf, len, "MAP%02d", map);
++    }
++    else
++    {
++        M_snprintf(buf, len, "E%dM%d", episode, map);
++    }
++}
++
++static void LoadLevels(void)
++{
++    char list[MAX_LEVELS * 9 + 1];
++    char *token;
++    int p;
++
++    if (numlevels >= 0)
++    {
++        return;
++    }
++    numlevels = 0;
++    freeplay = M_ParmExists("-doomedfreeplay");
++
++    p = M_CheckParmWithArgs("-doomedlevels", 1);
++    if (!p)
++    {
++        return;
++    }
++    M_StringCopy(list, myargv[p + 1], sizeof(list));
++    for (token = strtok(list, ","); token != NULL && numlevels < MAX_LEVELS;
++         token = strtok(NULL, ","))
++    {
++        int e, m;
++        char *c;
++
++        for (c = token; *c != '\0'; ++c)
++        {
++            *c = toupper((unsigned char) *c);
++        }
++        if (strlen(token) < sizeof(levels[0]) && ParseMapName(token, &e, &m))
++        {
++            M_StringCopy(levels[numlevels], token, sizeof(levels[0]));
++            ++numlevels;
++        }
++    }
++}
++
++static int LevelIndex(int episode, int map)
++{
++    char name[16];
++    int i;
++
++    LoadLevels();
++    MapName(episode, map, name, sizeof(name));
++    for (i = 0; i < numlevels; ++i)
++    {
++        if (!strcmp(levels[i], name))
++        {
++            return i;
++        }
++    }
++    return -1;
++}
++
++boolean DOOMED_LevelListActive(void)
++{
++    LoadLevels();
++    return numlevels > 0;
++}
++
++boolean DOOMED_MapAllowed(int episode, int map)
++{
++    return !DOOMED_LevelListActive() || freeplay || LevelIndex(episode, map) >= 0;
++}
++
++boolean DOOMED_CurrentMapListed(void)
++{
++    return DOOMED_LevelListActive() && LevelIndex(gameepisode, gamemap) >= 0;
++}
++
++void DOOMED_FilterNewGame(int *episode, int *map)
++{
++    int e, m;
++
++    if (DOOMED_MapAllowed(*episode, *map))
++    {
++        return;
++    }
++    if (ParseMapName(levels[0], &e, &m))
++    {
++        *episode = e;
++        *map = m;
++    }
++}
++
++void DOOMED_PlanRoute(wbstartstruct_t *wbs)
++{
++    int index;
++    int e, m;
++
++    route = ROUTE_NONE;
++    if (!DOOMED_LevelListActive() || demoplayback)
++    {
++        return;
++    }
++    index = LevelIndex(gameepisode, gamemap);
++    if (index >= 0 && index < numlevels - 1
++        && ParseMapName(levels[index + 1], &e, &m))
++    {
++        route = ROUTE_NEXT;
++        route_episode = gamemode == commercial ? gameepisode : e;
++        route_map = m;
++        // The intermission names the next level; it can only show one in
++        // the same episode.
++        if (route_episode == gameepisode)
++        {
++            wbs->next = m - 1;
++        }
++    }
++    else if (!freeplay)
++    {
++        route = ROUTE_FINISH;
++    }
++    else if (index >= 0 && gamemode != commercial && gamemap == 8)
++    {
++        // G_DoCompleted skipped the victory to show this listed map's
++        // intermission; restore the episode ending afterwards.
++        route = ROUTE_VICTORY;
++    }
++}
++
++boolean DOOMED_WorldDone(void)
++{
++    switch (route)
++    {
++        case ROUTE_NEXT:
++        case ROUTE_FINISH:
++            // Skip the between-episode text screens: straight on.
++            gameaction = ga_worlddone;
++            return true;
++        case ROUTE_VICTORY:
++            route = ROUTE_NONE;
++            gameaction = ga_victory;
++            return true;
++        default:
++            return false;
++    }
++}
++
++boolean DOOMED_DoWorldDone(void)
++{
++    switch (route)
++    {
++        case ROUTE_NEXT:
++            route = ROUTE_NONE;
++            gameepisode = route_episode;
++            wminfo.next = route_map - 1;
++            return false;
++        case ROUTE_FINISH:
++            route = ROUTE_NONE;
++            DOOMED_GameFinished();
++            D_StartTitle();
++            return true;
++        default:
++            return false;
++    }
++}
+diff --git a/src/doom/doomed_levels.h b/src/doom/doomed_levels.h
+new file mode 100644
+index 00000000..54b8f05c
+--- /dev/null
++++ b/src/doom/doomed_levels.h
+@@ -0,0 +1,43 @@
++//
++// Copyright(C) 2026 Adam Jenkins
++//
++// This program is free software; you can redistribute it and/or
++// modify it under the terms of the GNU General Public License
++// as published by the Free Software Foundation; either version 2
++// of the License, or (at your option) any later version.
++//
++// This program is distributed in the hope that it will be useful,
++// but WITHOUT ANY WARRANTY; without even the implied warranty of
++// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++// GNU General Public License for more details.
++//
++// DESCRIPTION:
++//  Level list for Moodle mod_doomed: the ordered maps an activity uses.
++//
++//  -doomedlevels E1M1,E1M5,E2M2   the list (ExMy or MAPxx names)
++//  -doomedfreeplay                let the player carry on past the list
++//
++//  Without -doomedlevels nothing changes. With it, finishing a listed map
++//  leads to the next listed map (secret exits included) and episode-end
++//  screens are skipped. After the last listed map the game ends (back to
++//  the title screen) unless -doomedfreeplay is given, in which case play
++//  carries on normally. Without freeplay, a new game (menu or warp cheat)
++//  for a map outside the list starts the first listed map instead, and
++//  saved games from other maps are refused.
++//
++
++#ifndef __DOOMED_LEVELS__
++#define __DOOMED_LEVELS__
++
++#include "doomtype.h"
++#include "d_player.h"
++
++boolean DOOMED_LevelListActive(void);
++boolean DOOMED_MapAllowed(int episode, int map);
++boolean DOOMED_CurrentMapListed(void);
++void DOOMED_FilterNewGame(int *episode, int *map);
++void DOOMED_PlanRoute(wbstartstruct_t *wbs);
++boolean DOOMED_WorldDone(void);
++boolean DOOMED_DoWorldDone(void);
++
++#endif
+diff --git a/src/doom/g_game.c b/src/doom/g_game.c
+index 3b950d4e..e2d80b66 100644
+--- a/src/doom/g_game.c
++++ b/src/doom/g_game.c
+@@ -75,6 +75,7 @@
+ 
+ #include "g_game.h"
+ #include "doomed_bridge.h"
++#include "doomed_levels.h"
+ 
+ 
+ #define SAVEGAMESIZE	0x2c000
+@@ -1429,7 +1430,7 @@ void G_DoCompleted (void)
+ 
+         if (gameversion == exe_chex)
+         {
+-            if (gamemap == 5)
++            if (gamemap == 5 && !DOOMED_CurrentMapListed())
+             {
+                 gameaction = ga_victory;
+                 return;
+@@ -1440,6 +1441,10 @@ void G_DoCompleted (void)
+             switch(gamemap)
+             {
+               case 8:
++                if (DOOMED_CurrentMapListed())
++                {
++                    break;
++                }
+                 gameaction = ga_victory;
+                 return;
+               case 9: 
+@@ -1452,7 +1457,7 @@ void G_DoCompleted (void)
+ 
+ //#if 0  Hmmm - why?
+     if ( (gamemap == 8)
+-	 && (gamemode != commercial) ) 
++	 && (gamemode != commercial) && !DOOMED_CurrentMapListed() ) 
+     {
+ 	// victory 
+ 	gameaction = ga_victory; 
+@@ -1578,6 +1583,7 @@ void G_DoCompleted (void)
+ 
+     StatCopy(&wminfo);
+  
++    DOOMED_PlanRoute(&wminfo);
+     WI_Start (&wminfo); 
+ } 
+ 
+@@ -1592,6 +1598,11 @@ void G_WorldDone (void)
+     if (secretexit) 
+ 	players[consoleplayer].didsecret = true; 
+ 
++    if (DOOMED_WorldDone())
++    {
++        return;
++    }
++
+     if ( gamemode == commercial )
+     {
+ 	switch (gamemap)
+@@ -1612,6 +1623,10 @@ void G_WorldDone (void)
+  
+ void G_DoWorldDone (void) 
+ {        
++    if (DOOMED_DoWorldDone())
++    {
++        return;
++    }
+     gamestate = GS_LEVEL; 
+     gamemap = wminfo.next+1; 
+     G_DoLoadLevel (); 
+@@ -1637,6 +1652,10 @@ void G_LoadGame (char* name)
+ void G_DoLoadGame (void) 
+ { 
+     int savedleveltime;
++    skill_t prevskill = gameskill;
++    int prevepisode = gameepisode;
++    int prevmap = gamemap;
++    int prevleveltime = leveltime;
+ 	 
+     gameaction = ga_nothing; 
+ 	 
+@@ -1655,6 +1674,19 @@ void G_DoLoadGame (void)
+         return;
+     }
+ 
++    // A save from a level outside the activity's list is refused; the
++    // header has already overwritten these, so put them back.
++    if (!DOOMED_MapAllowed(gameepisode, gamemap))
++    {
++        fclose(save_stream);
++        gameskill = prevskill;
++        gameepisode = prevepisode;
++        gamemap = prevmap;
++        leveltime = prevleveltime;
++        players[consoleplayer].message = "That saved game is not on a level of this activity.";
++        return;
++    }
++
+     savedleveltime = leveltime;
+     
+     // load a base level 
+@@ -1790,6 +1822,7 @@ G_DeferedInitNew
+   int		episode,
+   int		map) 
+ { 
++    DOOMED_FilterNewGame(&episode, &map);
+     d_skill = skill; 
+     d_episode = episode; 
+     d_map = map; 

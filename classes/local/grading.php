@@ -26,9 +26,11 @@ use stdClass;
  * teacher who changes the weights, the maximum grade or the grading method
  * regrades every attempt consistently.
  *
- * Only attempts that completed the activity's starting map count towards
- * the grade. Deaths and later maps are recorded for the report but earn
- * nothing.
+ * Grading is per level: each of the activity's levels gets the grade of its
+ * best (or last) counting attempt, and the activity grade is the average
+ * over all its levels, an unplayed level counting 0. Only completions of a
+ * listed level count; deaths and other maps are recorded for the report but
+ * earn nothing.
  *
  * @package    mod_doomed
  * @copyright  2026 Adam Jenkins <adam@wisecat.net>
@@ -38,7 +40,7 @@ class grading {
     /** @var int No grade. */
     public const MODE_NONE = 0;
 
-    /** @var int Full marks for completing the starting map, nothing otherwise. */
+    /** @var int Full marks for completing a level, nothing otherwise. */
     public const MODE_COMPLETION = 1;
 
     /** @var int Weighted percentage of kills, items and secrets. */
@@ -94,9 +96,9 @@ class grading {
     /**
      * Whether an attempt counts towards the grade and completion.
      *
-     * It must have completed the starting map at the activity's skill level
-     * or harder: a student can start a new game at another skill from the
-     * game menu, and an easier game must not earn full marks.
+     * It must have completed one of the activity's levels at the activity's
+     * skill level or harder: a student can start a new game at another skill
+     * from the game menu, and an easier game must not earn full marks.
      *
      * @param stdClass $doomed activity record
      * @param stdClass $attempt attempt record
@@ -104,7 +106,7 @@ class grading {
      */
     public static function attempt_counts(stdClass $doomed, stdClass $attempt): bool {
         return $attempt->outcome === self::OUTCOME_COMPLETED
-            && strtoupper($attempt->map) === strtoupper($doomed->startmap)
+            && levels::contains($doomed, (string) $attempt->map)
             && (int) $attempt->skill >= (int) $doomed->skill;
     }
 
@@ -164,28 +166,66 @@ class grading {
     }
 
     /**
-     * A user's grade from their attempts, by the activity's grading method.
+     * A user's grade for each of the activity's levels, by the grading method.
      *
      * @param stdClass $doomed activity record
      * @param stdClass[] $attempts the user's attempts, any order
-     * @return float|null null if no attempt counts or the activity is ungraded
+     * @return array map name => grade, or null for a level with no counting attempt; in level order
      */
-    public static function aggregate(stdClass $doomed, array $attempts): ?float {
-        $graded = [];
+    public static function level_grades(stdClass $doomed, array $attempts): array {
+        $bymap = [];
         foreach ($attempts as $attempt) {
             $grade = self::attempt_grade($doomed, $attempt);
             if ($grade !== null) {
-                $graded[] = [$attempt, $grade];
+                $bymap[strtoupper($attempt->map)][] = [$attempt, $grade];
             }
         }
-        if (!$graded) {
+        $result = [];
+        foreach (levels::from_record($doomed) as $map) {
+            $graded = $bymap[$map] ?? [];
+            if (!$graded) {
+                $result[$map] = null;
+            } else if ((int) $doomed->grademethod === self::METHOD_LAST) {
+                usort($graded, fn($a, $b) => [$b[0]->timecreated, $b[0]->id] <=> [$a[0]->timecreated, $a[0]->id]);
+                $result[$map] = $graded[0][1];
+            } else {
+                $result[$map] = max(array_column($graded, 1));
+            }
+        }
+        return $result;
+    }
+
+    /**
+     * A user's activity grade: the average of their level grades, unplayed levels counting 0.
+     *
+     * @param stdClass $doomed activity record
+     * @param stdClass[] $attempts the user's attempts, any order
+     * @return float|null null if no attempt counts at all or the activity is ungraded
+     */
+    public static function aggregate(stdClass $doomed, array $attempts): ?float {
+        $grades = self::level_grades($doomed, $attempts);
+        $played = array_filter($grades, fn($grade) => $grade !== null);
+        if (!$played) {
             return null;
         }
-        if ((int) $doomed->grademethod === self::METHOD_LAST) {
-            usort($graded, fn($a, $b) => [$b[0]->timecreated, $b[0]->id] <=> [$a[0]->timecreated, $a[0]->id]);
-            return $graded[0][1];
+        return round(array_sum($played) / count($grades), 5);
+    }
+
+    /**
+     * The activity's levels a user has completed (with a counting attempt), in level order.
+     *
+     * @param stdClass $doomed activity record
+     * @param stdClass[] $attempts the user's attempts, any order
+     * @return string[] map names
+     */
+    public static function completed_levels(stdClass $doomed, array $attempts): array {
+        $done = [];
+        foreach ($attempts as $attempt) {
+            if (self::attempt_counts($doomed, $attempt)) {
+                $done[strtoupper($attempt->map)] = true;
+            }
         }
-        return max(array_column($graded, 1));
+        return array_values(array_filter(levels::from_record($doomed), fn($map) => isset($done[$map])));
     }
 
     /**

@@ -26,10 +26,11 @@ The BSP is written by hand: one node splitting the map at x = 128 into two
 convex subsectors, so no node builder is needed. Textures come from the
 IWAD (Freedoom and the commercial IWADs share these names).
 
-Usage: make_exitroom_wad.py [--map E1M1|MAP01] [--hazard] output.wad
+Usage: make_exitroom_wad.py [--map E1M1|MAP01 | --maps E1M1,E1M2,...] [--hazard] output.wad
 
-The committed fixtures are exitroom_e1m1.wad, exitroom_map01.wad and
-(with --hazard) hazardroom_e1m1.wad.
+The committed fixtures are exitroom_e1m1.wad, exitroom_map01.wad,
+(with --hazard) hazardroom_e1m1.wad, and (with --maps E1M1,E1M2,E1M3,E1M8)
+exitrooms_e1.wad, which tests routing through an activity's level list.
 """
 
 import argparse
@@ -170,9 +171,13 @@ def build_blockmap(verts, lines):
     return struct.pack('<%dH' % len(words), *words)
 
 
-def write_wad(path, mapname, hazard=False):
-    """Write a PWAD containing the test map under the given map name."""
-    lumps = [(mapname, b'')] + build_map(hazard)
+def write_wad(path, mapnames, hazard=False):
+    """Write a PWAD containing the test map under each of the given map names."""
+    if isinstance(mapnames, str):
+        mapnames = [mapnames]
+    lumps = []
+    for mapname in mapnames:
+        lumps += [(mapname, b'')] + build_map(hazard)
     data = b''
     directory = []
     offset = 12
@@ -189,11 +194,14 @@ def write_wad(path, mapname, hazard=False):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--map', default='E1M1', choices=['E1M1', 'MAP01'])
+    parser.add_argument('--maps', help='comma-separated map names to write instead of --map, '
+                        'e.g. E1M1,E1M2,E1M3,E1M8 (each gets the same two rooms)')
     parser.add_argument('--hazard', action='store_true',
                         help='make the starting room a damaging floor (for death tests)')
     parser.add_argument('output')
     args = parser.parse_args()
-    write_wad(args.output, args.map, args.hazard)
+    maps = args.maps.upper().split(',') if args.maps else [args.map]
+    write_wad(args.output, maps, args.hazard)
 
 
 if __name__ == '__main__':

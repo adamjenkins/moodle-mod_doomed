@@ -27,6 +27,7 @@ defined('MOODLE_INTERNAL') || die();
 require_once($CFG->dirroot . '/course/moodleform_mod.php');
 
 use mod_doomed\local\grading;
+use mod_doomed\local\levels;
 use mod_doomed\local\wad;
 use mod_doomed\local\wads;
 
@@ -106,11 +107,20 @@ class mod_doomed_mod_form extends moodleform_mod {
         );
         $mform->addHelpButton('pwadfile', 'pwadfile', 'mod_doomed');
 
-        $mform->addElement('text', 'startmap', get_string('startmap', 'mod_doomed'), ['size' => '8']);
-        $mform->setType('startmap', PARAM_ALPHANUM);
-        $mform->setDefault('startmap', 'E1M1');
-        $mform->addRule('startmap', null, 'required', null, 'client');
-        $mform->addHelpButton('startmap', 'startmap', 'mod_doomed');
+        $mform->addElement('text', 'levels', get_string('levels', 'mod_doomed'), ['size' => '48']);
+        $mform->setType('levels', PARAM_TEXT);
+        $mform->setDefault('levels', 'E1M1');
+        $mform->addRule('levels', null, 'required', null, 'client');
+        $mform->addHelpButton('levels', 'levels', 'mod_doomed');
+
+        $mform->addElement(
+            'advcheckbox',
+            'freeplay',
+            get_string('freeplay', 'mod_doomed'),
+            get_string('freeplay_label', 'mod_doomed')
+        );
+        $mform->addHelpButton('freeplay', 'freeplay', 'mod_doomed');
+        $mform->setDefault('freeplay', 0);
 
         $mform->addElement('select', 'skill', get_string('skill', 'mod_doomed'), \mod_doomed\local\options::skills());
         $mform->setDefault('skill', (int) (get_config('mod_doomed', 'defaultskill') ?: 3));
@@ -321,20 +331,49 @@ class mod_doomed_mod_form extends moodleform_mod {
             $maps = array_merge($maps, $parsedpwad->maps);
         }
 
-        $startmap = strtoupper(trim($data['startmap'] ?? ''));
-        $mapformat = wad::map_format($startmap);
-        if ($mapformat === null) {
-            $errors['startmap'] = get_string('startmapinvalid', 'mod_doomed');
-        } else if ($format !== null && $mapformat !== $format) {
-            $errors['startmap'] = get_string(
-                'startmapwrongformat',
-                'mod_doomed',
-                $format === wad::FORMAT_MAPXX ? 'MAP01' : 'E1M1'
-            );
-        } else if (!in_array($startmap, $maps, true)) {
-            $errors['startmap'] = get_string('startmapnotfound', 'mod_doomed', $startmap);
+        $error = self::validate_levels(levels::parse((string) ($data['levels'] ?? '')), $maps, $format);
+        if ($error !== null) {
+            $errors['levels'] = $error;
         }
         return $errors;
+    }
+
+    /**
+     * Check a level list against the maps the chosen WADs provide.
+     *
+     * @param string[] $list parsed level names, in order
+     * @param string[] $maps maps available in the IWAD and PWAD
+     * @param string|null $format the IWAD's naming scheme (wad::FORMAT_*), or null if unknown
+     * @return string|null an error message, or null if the list is fine
+     */
+    public static function validate_levels(array $list, array $maps, ?string $format): ?string {
+        if (!$list) {
+            return get_string('required');
+        }
+        if (count($list) > levels::MAX_LEVELS) {
+            return get_string('levelstoomany', 'mod_doomed', levels::MAX_LEVELS);
+        }
+        if (strlen(levels::format($list)) > 255) {
+            return get_string('levelstoomany', 'mod_doomed', levels::MAX_LEVELS);
+        }
+        $seen = [];
+        foreach ($list as $name) {
+            $mapformat = wad::map_format($name);
+            if ($mapformat === null) {
+                return get_string('levelsinvalid', 'mod_doomed', s($name));
+            }
+            if ($format !== null && $mapformat !== $format) {
+                return get_string('levelswrongformat', 'mod_doomed', $format === wad::FORMAT_MAPXX ? 'MAP01' : 'E1M1');
+            }
+            if (!in_array($name, $maps, true)) {
+                return get_string('levelsnotfound', 'mod_doomed', $name);
+            }
+            if (isset($seen[$name])) {
+                return get_string('levelsduplicate', 'mod_doomed', $name);
+            }
+            $seen[$name] = true;
+        }
+        return null;
     }
 
     /**

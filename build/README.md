@@ -37,7 +37,7 @@ Two GPL source ports were evaluated (2026-10-01):
 | Stock build with emsdk 6.0.10 | Builds with no errors (verified before any patch) | Not attempted: unmaintained |
 | Licence | GPL-2.0-or-later | GPL-2.0-or-later |
 
-Chocolate Doom is maintained, builds cleanly, and needs only two small patches,
+Chocolate Doom is maintained, builds cleanly, and needs only small patches,
 so it was chosen. (GitHub API, `pushed_at`/`archived` fields, queried
 2026-10-01.) Its accuracy to the original game also means the intermission
 statistics we report are the ones players know.
@@ -58,6 +58,7 @@ playback (the title-screen attract demos).
 | `levelcomplete` | start of `WI_Start` (intermission begins) | `kills`, `totalkills`, `items`, `totalitems`, `secrets`, `totalsecrets`, `timetics`, `partics`, `ticrate`, `secretexit` |
 | `death` | `P_KillMobj` when the console player dies | `kills`, `items`, `secrets`, `timetics`, `ticrate` |
 | `saved` | end of `G_DoSaveGame` | none; the page syncs IDBFS to IndexedDB |
+| `finished` | (patch 0003) after the last listed level, without freeplay | none |
 
 `map` is the map lump name (`E1M1` or `MAP01`); `skill` is 1–5 as shown in the
 menu. Times are in game tics (35 per second). The level-complete hook runs
@@ -79,6 +80,41 @@ up after 2 seconds. If audio never starts (no output device, or autoplay
 refused), OPL detection fails and the game runs without music instead of
 hanging. The callback queued for the timed-out wait points into that stack
 frame, so it is cleared before returning.
+
+### 0003-level-list.patch
+
+Adds `src/doom/doomed_levels.c`/`.h`: the activity's ordered level list,
+passed as `-doomedlevels E1M1,E1M2,E1M5`, with `-doomedfreeplay` when
+students may carry on past it. Without `-doomedlevels`, nothing changes.
+
+- **Routing (`G_DoCompleted` → `DOOMED_PlanRoute`, `G_WorldDone`,
+  `G_DoWorldDone`):** finishing a listed level leads to the next listed
+  level, whatever the game's own order or a secret exit would do. That
+  includes jumps across episodes and non-consecutive maps. The text screens
+  between episodes are skipped.
+- **End of the list:** after the last listed level's intermission the engine
+  emits a `finished` event (bridge) and returns to the title screen. With
+  `-doomedfreeplay`, play carries on as normal instead.
+- **Restriction (without `-doomedfreeplay`):** `G_DeferedInitNew`, used by
+  the menu's New Game and the level-warp cheat, starts the first listed level
+  when asked for an unlisted one. `G_DoLoadGame` refuses a saved game from an
+  unlisted level, restoring the skill, episode, map and time that its header
+  had already overwritten. Demo playback (title screen) is unaffected,
+  because it does not go through `G_DeferedInitNew`.
+- **ExM8 fix:** in Doom-style data, finishing the 8th map of an episode jumps
+  straight to the episode's victory sequence without an intermission, so
+  nothing reported it. A *listed* ExM8 now gets its intermission (and the
+  `levelcomplete` report and routing). With freeplay, after the last listed
+  level, the victory sequence still follows.
+
+Verified in headless Chromium against `tests/fixtures/exitrooms_e1.wad`
+(E1M1, E1M2, E1M3 and E1M8, each an exit two steps from the start),
+2026-10-02:
+
+- E1M1,E1M2 → both complete, then `finished`.
+- E1M2,E1M8 → straight from E1M2 to E1M8, E1M8 reported, then `finished`.
+- E1M1 with freeplay → E1M2 follows normally.
+- E1M2 with the `idclev13` cheat → back at the start of E1M2.
 
 ## Link options
 

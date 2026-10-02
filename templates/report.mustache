@@ -22,21 +22,22 @@
     Context variables required for this template:
     * graded - whether the activity is graded
     * maxgrade - formatted maximum grade
-    * startmap - the activity's starting map
+    * levels - the activity's levels, comma-separated
     * hasstudents - whether anyone has attempts
-    * students - list of students with fullname, profileurl, summary, truncated (empty or a note) and attempts
+    * students - list of students with fullname, profileurl, summary, levelgrades (empty when ungraded), truncated (empty or a note) and attempts
 
     Example context (json):
     {
         "graded": true,
         "maxgrade": "100",
-        "startmap": "E1M1",
+        "levels": "E1M1, E1M2",
         "hasstudents": true,
         "students": [
             {
                 "fullname": "Sam Student",
                 "profileurl": "#",
-                "summary": "Attempts: 2. Current grade: 75.",
+                "summary": "Attempts: 2. Current grade: 37.5.",
+                "levelgrades": "Levels: E1M1: 75, E1M2: None yet",
                 "truncated": "",
                 "attempts": [
                     {"date": "1/10/26, 14:00", "outcome": "Completed", "completed": true, "map": "E1M1", "skill": 3,
@@ -51,7 +52,7 @@
     }
 }}
 <div class="mod-doomed-report">
-    <p>{{#str}}reportintro, mod_doomed, {{startmap}}{{/str}}</p>
+    <p>{{#str}}reportintro, mod_doomed, {{levels}}{{/str}}</p>
     {{#hasstudents}}
     <div class="table-responsive">
         <table class="generaltable table-sm">
@@ -76,6 +77,7 @@
                     <th scope="rowgroup" colspan="{{#graded}}10{{/graded}}{{^graded}}9{{/graded}}">
                         <a href="{{profileurl}}">{{fullname}}</a>
                         <span class="fw-normal ms-2">{{summary}}</span>
+                        {{#levelgrades}}<span class="fw-normal ms-2">{{levelgrades}}</span>{{/levelgrades}}
                         {{#truncated}}<span class="fw-normal ms-2 text-muted">{{truncated}}</span>{{/truncated}}
                     </th>
                 </tr>

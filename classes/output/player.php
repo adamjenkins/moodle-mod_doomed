@@ -69,6 +69,9 @@ class player implements renderable, templatable {
             'pwadurl' => $files['pwadurl'],
             'pwadname' => $files['pwadname'],
             'startmap' => $this->doomed->startmap,
+            // The engine routes play through these, in order; see build/README.md (patch 0003).
+            'levels' => \mod_doomed\local\levels::from_record($this->doomed),
+            'freeplay' => !empty($this->doomed->freeplay),
             'skill' => (int) $this->doomed->skill,
             // Browser save storage is keyed per user and activity so saves on a
             // shared computer do not leak between accounts or activities.

@@ -58,7 +58,14 @@ function doomed_supports($feature) {
  * @return void
  */
 function doomed_process_form_data(stdClass $data): void {
-    $data->startmap = strtoupper(trim($data->startmap ?? 'E1M1'));
+    // The ordered level list is the source of truth; startmap is its first entry.
+    $list = \mod_doomed\local\levels::parse((string) ($data->levels ?? ''));
+    if (!$list) {
+        $list = [strtoupper(trim((string) ($data->startmap ?? 'E1M1')))];
+    }
+    $data->levels = \mod_doomed\local\levels::format($list);
+    $data->startmap = $list[0];
+    $data->freeplay = empty($data->freeplay) ? 0 : 1;
     $data->timemodified = time();
 }
 
@@ -261,7 +268,7 @@ function doomed_get_coursemodule_info($coursemodule) {
     $doomed = $DB->get_record(
         'doomed',
         ['id' => $coursemodule->instance],
-        'id, name, intro, introformat, startmap, completionmap, completionmingrade'
+        'id, name, intro, introformat, startmap, levels, completionmap, completionmingrade'
     );
     if (!$doomed) {
         return false;
@@ -272,6 +279,7 @@ function doomed_get_coursemodule_info($coursemodule) {
         $result->content = format_module_intro('doomed', $doomed, $coursemodule->id, false);
     }
     $result->customdata['startmap'] = $doomed->startmap;
+    $result->customdata['levels'] = \mod_doomed\local\levels::format(\mod_doomed\local\levels::from_record($doomed));
     if ($coursemodule->completion == COMPLETION_TRACKING_AUTOMATIC) {
         $result->customdata['customcompletionrules']['completionmap'] = (int) $doomed->completionmap;
         $result->customdata['customcompletionrules']['completionmingrade'] = (float) $doomed->completionmingrade;
@@ -292,7 +300,8 @@ function mod_doomed_get_completion_active_rule_descriptions($cm) {
     $descriptions = [];
     foreach ($cm->customdata['customcompletionrules'] as $rule => $value) {
         if ($rule === 'completionmap' && !empty($value)) {
-            $descriptions[] = get_string('completiondetail:map', 'mod_doomed', s($cm->customdata['startmap'] ?? ''));
+            $levels = str_replace(',', ', ', $cm->customdata['levels'] ?? ($cm->customdata['startmap'] ?? ''));
+            $descriptions[] = get_string('completiondetail:map', 'mod_doomed', s($levels));
         } else if ($rule === 'completionmingrade' && (float) $value > 0) {
             $descriptions[] = get_string('completiondetail:mingrade', 'mod_doomed', format_float((float) $value, -1));
         }

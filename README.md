@@ -1,9 +1,9 @@
 # Doomed (mod_doomed)
 
 A Moodle activity that plays Doom-engine WAD files in the browser. Teachers
-add a Doomed activity to a course, choose the game data and a starting map,
-and students play in the page. Finishing the level can feed the gradebook and
-activity completion.
+add a Doomed activity to a course, choose the game data and the levels to play,
+and students play in the page. Each level is graded, and the results can feed
+the gradebook and activity completion.
 
 Doomed is a player for Doom-engine WAD files. It runs
 [Chocolate Doom](https://www.chocolate-doom.org/) compiled to WebAssembly and
@@ -17,13 +17,26 @@ the owners of any commercial game.
   allows it, a teacher with the `mod/doomed:uploadiwad` capability may upload
   their own IWAD instead (one `.wad` file). An optional add-on PWAD with
   custom maps loads on top.
-- **Starting map and skill:** the starting map is checked against the maps in
-  the chosen WAD files and their naming style (E1M1 or MAP01); skill 1–5.
-- **Grading:** none; pass/fail (full marks for completing the starting map);
-  or a percentage of kills, items and secrets from the intermission screen,
-  with teacher-chosen weights and an optional par-time bonus (off by
-  default). Unlimited attempts, keeping the highest or the last grade.
-- **Completion rules:** complete the starting map; achieve a minimum grade.
+- **Levels and skill:** an ordered list of levels (for example
+  `E1M1, E1M2, E1M5`), each checked against the maps in the chosen WAD files
+  and their naming style (E1M1 or MAP01); skill 1–5. The game starts on the
+  first level, and finishing a level leads to the next one in the list,
+  whatever the game's own order or a secret exit would do.
+- **Playing only the chosen levels:** by default the game ends after the last
+  listed level, and students cannot reach any other. The game menu's New Game
+  and the level-warp cheat start the first listed level instead, and saved
+  games from other levels are refused. A per-activity setting, "Let students
+  carry on to other levels", lets them play on past the list instead (still
+  ungraded).
+- **Grading, per level:** each listed level is graded on its own. The modes
+  are none; pass/fail (full marks for completing the level); or a percentage
+  of kills, items and secrets from its intermission screen, with
+  teacher-chosen weights and an optional par-time bonus (off by default).
+  Unlimited attempts, each level keeping its highest or its last grade. The
+  activity's gradebook grade is the average of the level grades; a level not
+  yet completed counts 0.
+- **Completion rules:** complete all the activity's levels; achieve a minimum
+  grade.
 - **Attempts report** for teachers, with group filtering.
 - **Saved games** persist in the student's browser (IndexedDB), separately per
   user and per activity, and (by default) a copy is kept on the server so they
@@ -32,7 +45,7 @@ the owners of any commercial game.
   (export and deletion of attempts), and events for viewing the activity and
   submitting a result.
 
-Only completions of the **starting map** at the activity's skill level **or
+Only completions of the activity's **listed levels** at its skill level **or
 harder** count towards grades and completion. Students can start a new game
 on another skill from the game menu; an easier game earns nothing. Deaths and
 other maps are recorded for the report.

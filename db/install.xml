@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/doomed/db" VERSION="20261001" COMMENT="XMLDB file for Moodle mod/doomed"
+<XMLDB PATH="mod/doomed/db" VERSION="20261002" COMMENT="XMLDB file for Moodle mod/doomed"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
 >
@@ -12,7 +12,9 @@
         <FIELD NAME="intro" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
         <FIELD NAME="introformat" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="iwadsource" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="freedoom1" SEQUENCE="false" COMMENT="freedoom1 (bundled) or upload"/>
-        <FIELD NAME="startmap" TYPE="char" LENGTH="8" NOTNULL="true" DEFAULT="E1M1" SEQUENCE="false" COMMENT="Map lump name the game starts on"/>
+        <FIELD NAME="startmap" TYPE="char" LENGTH="8" NOTNULL="true" DEFAULT="E1M1" SEQUENCE="false" COMMENT="First of the activity's levels (kept in step with levels)"/>
+        <FIELD NAME="levels" TYPE="char" LENGTH="255" NOTNULL="true" DEFAULT="E1M1" SEQUENCE="false" COMMENT="Ordered, comma-separated map names the activity plays and grades"/>
+        <FIELD NAME="freeplay" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 = students may carry on past the last level (ungraded)"/>
         <FIELD NAME="skill" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="3" SEQUENCE="false" COMMENT="Skill level 1-5"/>
         <FIELD NAME="grademode" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="0 none, 1 pass/fail on completing the starting map, 2 percentage from intermission stats"/>
         <FIELD NAME="grade" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="100" SEQUENCE="false" COMMENT="Maximum grade"/>

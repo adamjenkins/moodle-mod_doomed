@@ -25,6 +25,7 @@
 
 use mod_doomed\external\submit_result;
 use mod_doomed\local\grading;
+use mod_doomed\local\levels;
 use mod_doomed\local\wad;
 use mod_doomed\local\wads;
 
@@ -146,15 +147,16 @@ class restore_doomed_activity_structure_step extends restore_activity_structure_
 
         $doomedid = $this->task->get_activityid();
         $context = context_module::instance($this->task->get_moduleid());
-        $doomed = $DB->get_record('doomed', ['id' => $doomedid], 'id, iwadsource, startmap', MUST_EXIST);
+        $doomed = $DB->get_record('doomed', ['id' => $doomedid], 'id, iwadsource, startmap, levels', MUST_EXIST);
         if ($doomed->iwadsource === wads::SOURCE_UPLOAD && !self::uploaded_iwad_allowed($context, $this->task->get_userid())) {
             get_file_storage()->delete_area_files($context->id, 'mod_doomed', wads::AREA_IWAD);
             $DB->set_field('doomed', 'iwadsource', wads::SOURCE_FREEDOOM1, ['id' => $doomedid]);
             $doomed->iwadsource = wads::SOURCE_FREEDOOM1;
         }
         if ($doomed->iwadsource === wads::SOURCE_FREEDOOM1) {
-            $doomed->startmap = self::playable_startmap($doomed, $context);
-            $DB->set_field('doomed', 'startmap', $doomed->startmap, ['id' => $doomedid]);
+            $list = self::playable_levels($doomed, $context);
+            $DB->set_field('doomed', 'levels', levels::format($list), ['id' => $doomedid]);
+            $DB->set_field('doomed', 'startmap', $list[0], ['id' => $doomedid]);
         }
     }
 
@@ -184,22 +186,24 @@ class restore_doomed_activity_structure_step extends restore_activity_structure_
     }
 
     /**
-     * The restored starting map if the activity's WADs contain it, else the first map they have.
+     * The restored levels the activity's WADs contain, in order; if none, the first map they have.
      *
-     * @param stdClass $doomed activity record (iwadsource, startmap)
+     * @param stdClass $doomed activity record (iwadsource, startmap, levels)
      * @param context_module $context the restored activity
-     * @return string
+     * @return string[] at least one map name
      */
-    protected static function playable_startmap(stdClass $doomed, context_module $context): string {
+    protected static function playable_levels(stdClass $doomed, context_module $context): array {
+        $list = levels::from_record($doomed);
         try {
             $maps = wads::available_maps($doomed, $context);
         } catch (\moodle_exception $e) {
             $maps = [];
         }
-        if (!$maps || in_array($doomed->startmap, $maps, true)) {
-            return $doomed->startmap;
+        if (!$maps) {
+            return $list;
         }
-        return $maps[0];
+        $playable = array_values(array_intersect($list, $maps));
+        return $playable ?: [$maps[0]];
     }
 
     /**
@@ -245,7 +249,16 @@ class restore_doomed_activity_structure_step extends restore_activity_structure_
             ? $data->iwadsource : wads::SOURCE_FREEDOOM1;
 
         $startmap = strtoupper(trim((string) ($data->startmap ?? '')));
-        $data->startmap = wad::is_map_name($startmap) ? $startmap : 'E1M1';
+        $startmap = wad::is_map_name($startmap) ? $startmap : 'E1M1';
+        // Backups made before level lists existed carry only startmap.
+        $list = array_values(array_unique(array_filter(
+            levels::parse((string) ($data->levels ?? $startmap)),
+            [wad::class, 'is_map_name']
+        )));
+        $list = array_slice($list ?: [$startmap], 0, levels::MAX_LEVELS);
+        $data->levels = levels::format($list);
+        $data->startmap = $list[0];
+        $data->freeplay = empty($data->freeplay) ? 0 : 1;
 
         $data->skill = self::in_range($data->skill ?? null, 1, 5) ? (int) $data->skill : 3;
 

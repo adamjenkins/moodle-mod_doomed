@@ -29,10 +29,10 @@ $string['allowiwadupload_desc'] = 'Allow teachers who have the capability mod/do
 $string['attemptgrade'] = 'Grade (out of {$a})';
 $string['attemptsreport'] = 'Attempts report';
 $string['canvaslabel'] = 'Game screen. While it has focus it takes the keyboard; press Shift+Escape to give the keyboard back to the page.';
-$string['completiondetail:map'] = 'Complete map {$a}';
+$string['completiondetail:map'] = 'Complete every level: {$a}';
 $string['completiondetail:mingrade'] = 'Achieve a grade of at least {$a}';
-$string['completionmap'] = 'Complete the starting map';
-$string['completionmap_help'] = 'The student must finish the starting map (reach the intermission screen) at the activity\'s skill level or harder.';
+$string['completionmap'] = 'Complete all the activity\'s levels';
+$string['completionmap_help'] = 'The student must finish every one of the activity\'s levels (reach the intermission screen after each), each at the activity\'s skill level or harder.';
 $string['completionmingrade'] = 'Achieve a minimum grade';
 $string['completionmingradeneedsgrade'] = 'Choose a grading mode before requiring a minimum grade.';
 $string['completionmingraderange'] = 'The minimum grade must be more than 0 and no more than the maximum grade.';
@@ -47,19 +47,24 @@ $string['doomed:view'] = 'View Doomed activities';
 $string['doomed:viewreports'] = 'View Doomed attempt reports';
 $string['eventattemptsubmitted'] = 'Doomed result submitted';
 $string['eventcoursemoduleviewed'] = 'Doomed activity viewed';
+$string['freeplay'] = 'After the last level';
+$string['freeplay_help'] = 'Off (the default): the game ends after the last of the activity\'s levels, and students cannot reach any other level: the game menu\'s New Game and the level-warp cheat start the first listed level instead, and saved games from other levels are refused.
+
+On: students may carry on to the game\'s following levels after the last listed one, and use New Game to reach any level. Only the activity\'s levels are graded either way.';
+$string['freeplay_label'] = 'Let students carry on to other levels (not graded)';
 $string['fullscreen'] = 'Fullscreen';
 $string['gamesettings'] = 'Game';
 $string['grademethod'] = 'Attempts';
-$string['grademethod_help'] = 'Students may play as often as they like. Choose whether their grade is their best attempt or their most recent one. Only attempts that complete the starting map, at the activity\'s skill level or harder, count.';
+$string['grademethod_help'] = 'Students may play as often as they like. For each level, choose whether its grade is the student\'s best attempt or their most recent one. The activity grade is the average of the level grades, a level not yet completed counting 0. Only completions of the activity\'s levels, at its skill level or harder, count.';
 $string['grademethod_highest'] = 'Unlimited attempts, keep the highest grade';
 $string['grademethod_last'] = 'Unlimited attempts, keep the last grade';
 $string['grademode'] = 'Grading mode';
-$string['grademode_completion'] = 'Pass or fail: full marks for completing the starting map';
-$string['grademode_help'] = 'How results become grades.
+$string['grademode_completion'] = 'Pass or fail: full marks for each level completed';
+$string['grademode_help'] = 'How results become grades. Each of the activity\'s levels is graded on its own, and the activity grade is the average of the level grades; a level not yet completed counts 0.
 
 * No grade: the activity is not graded.
-* Pass or fail: completing the starting map earns full marks.
-* Percentage: the grade is a weighted percentage of the monsters killed, items collected and secrets found on the starting map, as shown on the intermission screen.
+* Pass or fail: completing a level earns full marks for that level.
+* Percentage: a level\'s grade is a weighted percentage of the monsters killed, items collected and secrets found on it, as shown on the intermission screen.
 
 Results are reported by the student\'s browser and can be forged, so do not use Doomed for high-stakes assessment.';
 $string['grademode_none'] = 'No grade';
@@ -81,6 +86,17 @@ $string['keys_release'] = 'Shift+Esc: release the keyboard and mouse back to the
 $string['keys_use'] = 'Space: open doors and press switches';
 $string['keyshelp'] = 'Click the game screen to give it the keyboard. While it has focus it is outlined.';
 $string['kills'] = 'Kills';
+$string['levelgrade'] = '{$a->map}: {$a->grade}';
+$string['levelgrades'] = 'Levels: {$a}';
+$string['levels'] = 'Levels';
+$string['levels_help'] = 'The maps (levels) the activity plays and grades, in order, as named inside the WAD files: E1M1 to E4M9 for episode-style game data such as Freedoom: Phase 1, or MAP01 to MAP32 for Doom II-style data. Separate them with commas or spaces, for example: E1M1, E1M2, E1M5
+
+The game starts on the first. Finishing a level leads to the next one in this list, whatever the game\'s own order or secret exits would do. Each level is graded on its own; the activity grade is their average.';
+$string['levelsduplicate'] = '{$a} is listed more than once.';
+$string['levelsinvalid'] = '{$a} is not a map name. Enter names such as E1M1 or MAP01.';
+$string['levelsnotfound'] = 'Map {$a} is not in the chosen WAD files.';
+$string['levelstoomany'] = 'List at most {$a} levels.';
+$string['levelswrongformat'] = 'This game data names its maps like {$a}.';
 $string['leveltime'] = 'Time';
 $string['map'] = 'Map';
 $string['maxwadsize'] = 'Maximum WAD upload size';
@@ -121,7 +137,7 @@ $string['privacy:metadata:doomed_attempts:userid'] = 'The ID of the user who pla
 $string['privacy:savedgames'] = 'Saved games';
 $string['pwadfile'] = 'Add-on WAD (PWAD)';
 $string['pwadfile_help'] = 'An optional PWAD with custom maps or other changes, loaded on top of the IWAD. Its maps can be chosen as the starting map.';
-$string['reportintro'] = 'Each completion of a level and each death is recorded. Only completions of the starting map, {$a}, at the activity\'s skill level or harder count towards the grade and completion.';
+$string['reportintro'] = 'Each completion of a level and each death is recorded. Only completions of the activity\'s levels ({$a}), at its skill level or harder, count towards the grade and completion; each level keeps its best or last grade, and the activity grade is their average.';
 $string['resetattempts'] = 'Delete all Doomed attempts';
 $string['savesdisabled'] = 'This site does not keep saved games on the server.';
 $string['secrets'] = 'Secrets';
@@ -133,22 +149,18 @@ $string['skill3'] = '3 (medium)';
 $string['skill4'] = '4 (hard)';
 $string['skill5'] = '5 (hardest: monsters respawn)';
 $string['startgame'] = 'Start game at {$a}';
-$string['startmap'] = 'Starting map';
-$string['startmap_help'] = 'The map the game starts on, as named inside the WAD: E1M1 to E4M9 for episode-style game data such as Freedoom: Phase 1, or MAP01 to MAP32 for Doom II-style data.';
-$string['startmapinvalid'] = 'Enter a map name such as E1M1 or MAP01.';
-$string['startmapnotfound'] = 'Map {$a} is not in the chosen WAD files.';
-$string['startmapwrongformat'] = 'This game data names its maps like {$a}.';
 $string['statusblurred'] = 'The game no longer has the keyboard. Click the game screen to keep playing.';
 $string['statusended'] = 'The game has ended. Reload the page to play again.';
 $string['statuserror'] = 'The game could not be started. Check your connection and try again; if it keeps failing, ask your teacher.';
+$string['statusfinished'] = 'You have finished all the levels of this activity. To play them again, start a new game from the game menu (Esc).';
 $string['statusfocused'] = 'The game has the keyboard. Press Shift+Esc to release it.';
 $string['statusloadingengine'] = 'Loading the game engine…';
 $string['statusloadingwad'] = 'Loading game data…';
 $string['statusloadingwadpct'] = 'Loading game data: {$a}%';
 $string['statusready'] = 'Ready.';
 $string['statusrecorded'] = 'Level complete. Your result has been recorded.';
-$string['statusrecordedgrade'] = 'Level complete. Your result has been recorded: {$a->grade} out of {$a->maxgrade}.';
-$string['statusrecordednotcounted'] = 'Level complete. Your result has been recorded, but only the starting map at the activity\'s skill level or harder counts towards your grade.';
+$string['statusrecordedgrade'] = 'Level complete. Your result has been recorded: {$a->grade} out of {$a->maxgrade} for this level. Your activity grade is the average over all its levels.';
+$string['statusrecordednotcounted'] = 'Level complete. Your result has been recorded, but only the activity\'s levels at its skill level or harder count towards your grade.';
 $string['statusrecordfailed'] = 'Your result could not be recorded. Check your connection; the game carries on.';
 $string['statussavefailed'] = 'Your game was saved in this browser, but the copy on the server could not be updated.';
 $string['statussavestored'] = 'Your game was saved, here and on the server.';

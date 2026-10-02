@@ -4,6 +4,7 @@ Emscripten SDK: 6.0.10
 Patches:
 2b2ee42bf7b4b3de0c2a97e7fb70e431a7b5004f1f463b5990ba3b9f50d63f68  ./0001-page-bridge.patch
 7f5423018d00a53d7a237ef5866ac5db76ee412d1483018b3bf7541206b3353c  ./0002-opl-delay-no-hang.patch
+c987e7fe141395c954663a346be9f6487dfaf666ddf3357e69e0b24bbfb1d902  ./0003-level-list.patch
 Outputs:
-a7b01cdafe95f4dce92617c1c8f2be8d136571af4b0236f80d1ac43bc880283b  doomed-engine.js
-cc2bd3bdc96074427478b9ef04b081be66e917162f774e61a9f114b67330e8ba  doomed-engine.wasm
+3df269bec8080d852117838d4857794302a2fa41bb20cccb3d08fa0a88f055ff  doomed-engine.js
+9be04d9260dfc69a2545d78d518157bffeefd883b85e52fd053633b04c1af7ce  doomed-engine.wasm

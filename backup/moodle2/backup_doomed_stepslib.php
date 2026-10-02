@@ -41,7 +41,7 @@ class backup_doomed_activity_structure_step extends backup_activity_structure_st
         $userinfo = $this->get_setting_value('userinfo');
 
         $doomed = new backup_nested_element('doomed', ['id'], [
-            'name', 'intro', 'introformat', 'iwadsource', 'startmap', 'skill',
+            'name', 'intro', 'introformat', 'iwadsource', 'startmap', 'levels', 'freeplay', 'skill',
             'grademode', 'grade', 'weightkills', 'weightitems', 'weightsecrets',
             'timebonus', 'grademethod', 'completionmap', 'completionmingrade',
             'timecreated', 'timemodified',

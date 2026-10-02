@@ -9,8 +9,9 @@ All notable changes to this plugin are documented here. The format follows
 
 - In-browser player: Chocolate Doom built to WebAssembly (reproducible build in `build/`), with Freedoom: Phase 1 bundled.
 - Activity settings: game data (bundled Freedoom or an uploaded IWAD), optional PWAD, starting map checked against the WADs, skill.
-- Grading: none, pass/fail, or a weighted percentage of kills, items and secrets with an optional par-time bonus; highest or last attempt.
-- Completion rules: complete the starting map; achieve a minimum grade.
+- Ordered level list per activity: play follows the list; by default the game ends after the last level and other levels cannot be reached (New Game, level-warp cheat, saved games); optionally students may carry on past it ungraded.
+- Grading per level (none, pass/fail, or a weighted percentage of kills, items and secrets with an optional par-time bonus; highest or last attempt per level); the activity grade is the average over the levels.
+- Completion rules: complete all the activity's levels; achieve a minimum grade.
 - Result submission web service (`mod_doomed_submit_result`) with sanity checks and throttling.
 - Teacher attempts report with group filtering.
 - Backup and restore (with or without attempts), course reset, privacy provider, events.

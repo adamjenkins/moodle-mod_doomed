@@ -24,16 +24,16 @@ Feature: Teachers set up Doomed activities and review attempts, students play
     Given I log in as "teacher1"
     When I add a "doomed" activity to course "Course 1" section "1" and I fill the form with:
       | Name          | Hangar practice                          |
-      | Starting map  | E1M1                                     |
+      | Levels        | E1M1, E1M2                               |
       | Grading mode  | Percentage from kills, items and secrets |
     And I am on "Course 1" course homepage
     Then I should see "Hangar practice"
 
-  Scenario: A starting map named in the wrong format for the bundled Freedoom is refused
+  Scenario: A level named in the wrong format for the bundled Freedoom is refused
     Given I log in as "teacher1"
     When I add a "doomed" activity to course "Course 1" section "1" and I fill the form with:
       | Name         | Wrong map |
-      | Starting map | MAP01     |
+      | Levels       | MAP01     |
     Then I should see "This game data names its maps like E1M1."
     And I am on "Course 1" course homepage
     And I should not see "Wrong map"

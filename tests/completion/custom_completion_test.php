@@ -136,6 +136,20 @@ final class custom_completion_test extends advanced_testcase {
     }
 
     /**
+     * With several levels, completionmap needs every one of them completed.
+     */
+    public function test_completionmap_all_levels(): void {
+        $doomed = $this->create_doomed(['levels' => 'E1M1,E1M2']);
+        $this->add_attempt($doomed, ['map' => 'E1M1']);
+        // An unlisted level does not stand in for a listed one.
+        $this->add_attempt($doomed, ['map' => 'E1M3']);
+        $this->assertSame(COMPLETION_INCOMPLETE, $this->completion($doomed)->get_state('completionmap'));
+
+        $this->add_attempt($doomed, ['map' => 'E1M2']);
+        $this->assertSame(COMPLETION_COMPLETE, $this->completion($doomed)->get_state('completionmap'));
+    }
+
+    /**
      * completionmap is per user.
      */
     public function test_completionmap_other_user(): void {
@@ -215,7 +229,7 @@ final class custom_completion_test extends advanced_testcase {
         $completion = $this->completion($doomed);
         $this->assertEqualsCanonicalizing(['completionmap', 'completionmingrade'], $completion->get_available_custom_rules());
         $this->assertSame([
-            'completionmap' => 'Complete map E2M4',
+            'completionmap' => 'Complete every level: E2M4',
             'completionmingrade' => 'Achieve a grade of at least 37.5',
         ], $completion->get_custom_rule_descriptions());
         $this->assertSame(['completionview', 'completionmap', 'completionmingrade'], $completion->get_sort_order());

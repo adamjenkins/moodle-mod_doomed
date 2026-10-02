@@ -20,12 +20,13 @@ namespace mod_doomed\completion;
 
 use core_completion\activity_custom_completion;
 use mod_doomed\local\grading;
+use mod_doomed\local\levels;
 
 /**
  * Custom completion rules for mod_doomed.
  *
- * - completionmap: the student completed the starting map (at the activity's
- *   skill level or harder).
+ * - completionmap: the student completed every one of the activity's levels
+ *   (each at the activity's skill level or harder).
  * - completionmingrade: the student's grade is at least the given value.
  *
  * @package    mod_doomed
@@ -51,12 +52,8 @@ class custom_completion extends activity_custom_completion {
                 'userid' => $this->userid,
                 'outcome' => grading::OUTCOME_COMPLETED,
             ]);
-            foreach ($attempts as $attempt) {
-                if (grading::attempt_counts($doomed, $attempt)) {
-                    return COMPLETION_COMPLETE;
-                }
-            }
-            return COMPLETION_INCOMPLETE;
+            $done = grading::completed_levels($doomed, $attempts);
+            return count($done) === count(levels::from_record($doomed)) ? COMPLETION_COMPLETE : COMPLETION_INCOMPLETE;
         }
 
         // Rule completionmingrade.
@@ -80,10 +77,10 @@ class custom_completion extends activity_custom_completion {
      * @return array rule => description
      */
     public function get_custom_rule_descriptions(): array {
-        $startmap = $this->cm->customdata['startmap'] ?? '';
+        $levels = $this->cm->customdata['levels'] ?? '';
         $mingrade = $this->cm->customdata['customcompletionrules']['completionmingrade'] ?? 0;
         return [
-            'completionmap' => get_string('completiondetail:map', 'mod_doomed', s($startmap)),
+            'completionmap' => get_string('completiondetail:map', 'mod_doomed', s(str_replace(',', ', ', $levels))),
             'completionmingrade' => get_string('completiondetail:mingrade', 'mod_doomed', format_float((float) $mingrade, -1)),
         ];
     }
